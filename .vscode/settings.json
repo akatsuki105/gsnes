@@ -1,0 +1,9 @@
+{
+    "[go]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        }
+    },
+    "go.autocompleteUnimportedPackages": true,
+}
