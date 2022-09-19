@@ -3,22 +3,28 @@ BINDIR := ./build
 VERSION := $(shell git describe --tags 2>/dev/null)
 LDFLAGS := -X 'main.version=$(VERSION) -s -w'
 
-.PHONY: build-darwin
+## Build native
 build:
-	@go build -trimpath -o $(BINDIR)/darwin-amd64/$(NAME) -ldflags "$(LDFLAGS)" ./cmd/
+	@go build -trimpath -o $(BINDIR)/$(NAME) -ldflags "$(LDFLAGS)" ./cmd/
 
-.PHONY: build-linux
-build-linux:
-	@GOOS=linux GOARCH=amd64 go build -trimpath -o $(BINDIR)/linux-amd64/$(NAME) -ldflags "$(LDFLAGS)" ./cmd/
+## Build for profiler(for development)
+build-profiler:
+	@go build -o $(BINDIR)/profiler/profiler ./profiler
 
-.PHONY: build-windows
-build-windows:
-	@GOOS=windows GOARCH=amd64 go build -trimpath -o $(BINDIR)/windows-amd64/$(NAME).exe -ldflags "$(LDFLAGS)" ./cmd/
+## Test sfc core
+test:
+	@go run ./tester/PeterLemon 
 
-.PHONY: clean
+## Clean repository
 clean:
 	@-rm -rf $(BINDIR)
 
-.PHONY: help
+## Show help
 help:
 	@make2help $(MAKEFILE_LIST)
+
+## Run godoc on localhost:3000
+doc:
+	@godoc -http=:3000
+
+.PHONY: build build-profiler test clean help doc
