@@ -30,7 +30,7 @@ type dmaChan struct {
 }
 
 func (d *dmaChan) reset() {
-	d.event = *scheduler.NewEvent(EVENT_DMA, d.gdmaTransfer, EVENT_DMA_PRIO|uint(d.idx))
+	d.event = *scheduler.NewEvent(EVENT_DMA, d.runGDMA, EVENT_DMA_PRIO|uint(d.idx))
 	d.bus.a, d.bus.b = u24(0, 0), 0
 	d.remaining = 0
 }
@@ -50,7 +50,7 @@ func (d *dmaChan) trigger(isHdma bool) {
 	d.c.s.ReSchedule(&d.event, FAST) // After $420b is written, the CPU gets one more CPU cycle before the pause
 }
 
-func (d *dmaChan) gdmaTransfer(cyclesLate int64) {
+func (d *dmaChan) runGDMA(cyclesLate int64) {
 	c := d.c.dma
 	w := d.c.w
 	w.blocked = true
