@@ -3,12 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/pokemium/gsnes/core"
 )
+
+var exits = []func(){}
 
 var version string
 
@@ -82,12 +83,14 @@ func run() exitCode {
 	e.setDebugMode(*isDebug)
 	e.sfc.LoadROM(romData)
 
-	if *isDebug {
-		go e.runServer(3001)
-	}
-
 	ebiten.SetWindowTitle("gsnes")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
+
+	defer func() {
+		for _, f := range exits {
+			f()
+		}
+	}()
 
 	if err := ebiten.RunGame(e); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -99,59 +102,4 @@ func run() exitCode {
 
 func printVersion() {
 	fmt.Println(title+":", version)
-}
-
-func (e *emulator) runServer(port int) {
-	fmt.Printf("Server listening on port %d\n", port)
-	http.HandleFunc("/pause", cors(e.pause))
-	http.HandleFunc("/resume", cors(e.resume))
-	http.HandleFunc("/step", cors(e.step))
-	http.HandleFunc("/wram", cors(e.wram))
-	http.HandleFunc("/vram", cors(e.vram))
-	http.HandleFunc("/palette", cors(e.palette))
-	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
-}
-
-func cors(fn func(w http.ResponseWriter, req *http.Request)) func(w http.ResponseWriter, req *http.Request) {
-	return func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		fn(w, req)
-	}
-}
-
-func (e *emulator) pause(w http.ResponseWriter, req *http.Request) {
-	e.sfc.Pause(true)
-}
-
-func (e *emulator) resume(w http.ResponseWriter, req *http.Request) {
-	e.sfc.Pause(false)
-}
-
-func (e *emulator) step(w http.ResponseWriter, req *http.Request) {
-	e.sfc.Run()
-}
-
-func (e *emulator) wram(w http.ResponseWriter, req *http.Request) {
-	pbuf, _ := e.sfc.MemoryBuffer("WRAM")
-	buf := (*[core.WRAM_SIZE]uint8)(pbuf)
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(buf[:])
-}
-
-func (e *emulator) vram(w http.ResponseWriter, req *http.Request) {
-	pbuf, _ := e.sfc.MemoryBuffer("VRAM")
-	buf := (*[core.VRAM_SIZE]uint8)(pbuf)
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(buf[:])
-}
-
-func (e *emulator) palette(w http.ResponseWriter, req *http.Request) {
-	pbuf, _ := e.sfc.MemoryBuffer("PALETTE")
-	buf := (*[512]uint8)(pbuf)
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(buf[:])
 }

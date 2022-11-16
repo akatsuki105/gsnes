@@ -10,12 +10,14 @@ type renderer struct {
 	oam     *oam
 	screens [2][HORIZONTAL * VERTICAL]iro.RGB555 // 0: main, 1: sub
 
+	mode                   uint8   // BG Mode(0..7)
 	layers                 []layer // idx 0 is backdrop
 	bg1, bg2, bg3, bg4     *bg
 	bg1h, bg2h, bg3h, bg4h *bg
 	objs                   [4]*objl
 	backdrop               layer
 	bg3a                   bool // BGMODE.3
+	w                      windowSystem
 }
 
 func newRenderer(vram *vram, pal *palette, oam *oam) *renderer {
@@ -60,6 +62,7 @@ func (r *renderer) frameBuffer() []iro.RGB555 {
 }
 
 func (r *renderer) setBgMode(m uint8) {
+	r.mode = m
 	bg1, bg2, bg3, bg4 := r.bg1, r.bg2, r.bg3, r.bg4
 	bg1.color = DISABLED
 	bg2.color = DISABLED

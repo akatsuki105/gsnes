@@ -126,6 +126,7 @@ func (dsp *DSP) Reset() {
 	dsp.echoRemain = 1
 }
 
+// 1 Cycle = 1 / 32000 sec
 func (dsp *DSP) Cycle() {
 	var totalL int = 0
 	var totalR int = 0

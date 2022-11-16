@@ -22,12 +22,12 @@ const (
 )
 
 const (
-	MAX_ROM_SIZE   = 8 * MB
-	WRAM_BANK_SIZE = 64 * KB
-	WRAM_SIZE      = 2 * WRAM_BANK_SIZE
-	SRAM_SIZE      = 512 * KB
-	VRAM_SIZE      = 64 * KB
-	ROM_SIZE       = MAX_ROM_SIZE + 0x200 + 0x8000
+	MAX_ROM_SIZE = 8 * MB
+	WRAM_SIZE    = 128 * KB
+	SRAM_SIZE    = 512 * KB
+	VRAM_SIZE    = 64 * KB
+	PAL_SIZE     = 512
+	ROM_SIZE     = MAX_ROM_SIZE + 0x200 + 0x8000
 )
 
 const (
@@ -133,18 +133,33 @@ const (
 )
 
 const (
-	EVENT_VIDEO  = "EvtVideo"
-	EVENT_IRQ    = "EvtIRQ"
-	EVENT_HCOUNT = "EvtHDot"
-	EVENT_DMA    = "EvtDma"
+	EVENT_TMP      = "Tmp"
+	EVENT_CPU      = "ResumeCPU"
+	EVENT_VIDEO    = "Video"
+	EVENT_NMI      = "NMI"
+	EVENT_IRQ      = "IRQ"
+	EVENT_HCOUNT   = "HDot"
+	EVENT_INIT_DMA = "InitGDMA"
+	EVENT_DMA      = "GDMA"
 )
 
 const (
-	EVENT_IRQ_PRIO   = 0
-	EVENT_VIDEO_PRIO = 1
-	EVENT_DMA_PRIO   = 0x10
+	EVENT_TMP_PRIO      = 0
+	EVENT_CPU_PRIO      = 1
+	EVENT_NMI_PRIO      = 2
+	EVENT_IRQ_PRIO      = 3
+	EVENT_INIT_DMA_PRIO = 4
+	EVENT_VIDEO_PRIO    = 5
+	EVENT_DMA_PRIO      = 0x10
 )
 
 const (
 	INIT_CYCLE = 182
+)
+
+const (
+	BLOCK      = 0
+	BLOCK_DRAM = 1
+	BLOCK_DMA  = 2
+	BLOCK_HDMA = 3
 )

@@ -53,6 +53,7 @@ func (w *w65816) AND(addr uint24) {
 	w.read16(addr, and16)
 }
 
+// Cycle: 1 or 2(E=0)
 func (w *w65816) ORA(addr uint24) {
 	if w.r.emulation || w.r.p.m {
 		ora8 := func(val uint8) {
@@ -60,6 +61,7 @@ func (w *w65816) ORA(addr uint24) {
 			w.r.p.setFlags(zn(w.r.a, 8))
 		}
 
+		// 1
 		w.read8(addr, ora8)
 		return
 	}
@@ -69,9 +71,11 @@ func (w *w65816) ORA(addr uint24) {
 		w.r.p.setFlags(zn(w.r.a, 16))
 	}
 
+	// 2
 	w.read16(addr, ora16)
 }
 
+// Cycle: 1 or 2(E=0)
 func (w *w65816) LDNm(r *uint16) func(addr uint24) {
 	p := &w.r.p.x
 	if r == &w.r.a {
@@ -80,6 +84,7 @@ func (w *w65816) LDNm(r *uint16) func(addr uint24) {
 
 	return func(addr uint24) {
 		if w.r.emulation || *p {
+			// 1
 			w.read8(addr, func(val uint8) {
 				w.r.l(r, val)
 				w.r.p.setFlags(zn(*r, 8))
@@ -87,6 +92,7 @@ func (w *w65816) LDNm(r *uint16) func(addr uint24) {
 			return
 		}
 
+		// 2
 		w.read16(addr, func(val uint16) {
 			*r = val
 			w.r.p.setFlags(zn(*r, 16))
@@ -108,14 +114,15 @@ func (w *w65816) STN(r *uint16) func(addr uint24) {
 		}
 
 		if w.r.emulation || *p {
-			w.write8(addr, uint8(val), func() {})
+			w.write8(addr, uint8(val), nil)
 			return
 		}
 
-		w.write16(addr, val, func() {})
+		w.write16(addr, val, nil)
 	}
 }
 
+// Cycle: 1
 func (w *w65816) MOV(dst, src *uint16) {
 	is16bit := false
 
@@ -137,14 +144,15 @@ func (w *w65816) MOV(dst, src *uint16) {
 	w.inst = func(w *w65816) {
 		if !is16bit && (w.r.emulation || *p) {
 			w.r.l(dst, uint8(*src))
-			if dst != &w.r.s {
+			if src != &w.r.s && dst != &w.r.s {
 				w.r.p.setFlags(zn(*dst, 8))
 			}
 			return
 		}
 
+		// 16bit
 		*dst = *src
-		if dst != &w.r.s {
+		if src != &w.r.s && dst != &w.r.s {
 			w.r.p.setFlags(zn(*dst, 16))
 		}
 	}

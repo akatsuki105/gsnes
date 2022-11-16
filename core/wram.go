@@ -2,12 +2,14 @@ package core
 
 // 0x7E:0000..7F:FFFF
 type wram struct {
-	buf  [128 * KB]uint8
+	buf  []uint8
 	addr uint32 // WMADD
 }
 
 func newWram() *wram {
-	w := &wram{}
+	w := &wram{
+		buf: make([]uint8, 128*KB),
+	}
 	return w
 }
 

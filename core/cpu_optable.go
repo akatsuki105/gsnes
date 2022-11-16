@@ -55,7 +55,12 @@ func op07(w *w65816) {
 
 // PHP, `PUSH P`
 func op08(w *w65816) {
-	w.PUSH8(w.r.p.pack(), func(w *w65816) {})
+	p := w.r.p
+	if w.r.emulation {
+		p.x = true
+		p.m = true
+	}
+	w.PUSH8(p.pack(), func(w *w65816) {})
 }
 
 func op09(w *w65816) {
@@ -186,7 +191,8 @@ func op1F(w *w65816) {
 func op20(w *w65816) {
 	// 2,3
 	w.imm16(func(pc uint16) {
-		w.state = CPU_DUMMY_READ // 4(IO)
+		// 4(IO)
+		w.state = CPU_DUMMY_READ
 		w.inst = func(w *w65816) {
 			// 5,6
 			w.PUSH16(w.r.pc.offset-1, func(w *w65816) {
@@ -200,6 +206,7 @@ func op21(w *w65816) {
 	w.indirectX(w.AND)
 }
 
+// JSL
 func op22(w *w65816) {
 	// 2, 3
 	w.imm16(func(pc uint16) {
@@ -242,15 +249,21 @@ func op27(w *w65816) {
 
 // PLP, `POP P`
 func op28(w *w65816) {
-	// 2
+	// 2(IO)
 	w.state = CPU_DUMMY_READ
 	w.inst = func(w *w65816) {
-		// 3
+		// 3(IO)
 		w.state = CPU_DUMMY_READ
 		w.inst = func(w *w65816) {
+
 			// 4
-			w.POP8(func(val uint8) {
-				w.r.p.setPacked(val)
+			w.POP8(func(p uint8) {
+				old := w.r.p
+				if w.r.emulation {
+					p = setBit(p, 4, old.x)
+					p = setBit(p, 5, true)
+				}
+				w.r.p.setPacked(p)
 			})
 		}
 	}
@@ -381,18 +394,29 @@ func op40(w *w65816) {
 	w.inst = func(w *w65816) {
 		// 3
 		w.POP8(func(p uint8) {
+			if w.r.emulation {
+				old := w.r.p
+				p = setBit(p, 4, old.x)
+				p = setBit(p, 5, true)
+			}
 			w.r.p.setPacked(p)
-			// 4
+
+			// 4, 5
 			w.POP16(func(pc uint16) {
-				// 6
 				if w.r.emulation {
 					w.r.pc = u24(w.r.pc.bank, pc)
-					return
-				}
 
-				w.POP8(func(pb uint8) {
-					w.r.pc = u24(pb, pc)
-				})
+					// 6
+					addCycle(w.cycles, FAST)
+				} else {
+					// 6
+					w.POP8(func(pb uint8) {
+						w.r.pc = u24(pb, pc)
+
+						// 7
+						addCycle(w.cycles, FAST)
+					})
+				}
 			})
 		})
 	}
@@ -424,14 +448,21 @@ func op44(w *w65816) {
 
 		// 4
 		w.read8(u24(ss, w.r.x), func(val uint8) {
+			// 5
 			w.write8(u24(dd, w.r.y), val, func() {
 				w.r.x--
 				w.r.y--
+				if w.r.emulation || w.r.p.x {
+					w.r.x &= 0x00FF
+					w.r.y &= 0x00FF
+				}
+
 				w.r.a--
 				if w.r.a != 0xffff {
 					w.r.pc.offset -= 3 // まだ転送が終わってないのでもう一度実行させる
 				}
 
+				// 6, 7
 				addCycle(w.cycles, FAST*2)
 			})
 		})
@@ -527,6 +558,11 @@ func op54(w *w65816) {
 			w.write8(u24(dd, w.r.y), val, func() {
 				w.r.x++
 				w.r.y++
+				if w.r.emulation || w.r.p.x {
+					w.r.x &= 0x00FF
+					w.r.y &= 0x00FF
+				}
+
 				w.r.a--
 				if w.r.a != 0xffff {
 					w.r.pc.offset -= 3 // まだ転送が終わってないのでもう一度実行させる
@@ -611,10 +647,16 @@ func op61(w *w65816) {
 
 // PER rel16 (`PUSH disp16`)
 func op62(w *w65816) {
+	// 2, 3
 	w.imm16(func(nnnn uint16) {
-		disp := int(int16(nnnn))
-		val := w.r.pc.plus(disp)
-		w.PUSH16(val.offset, func(w *w65816) {})
+		// 4
+		w.state = CPU_DUMMY_READ
+		w.inst = func(w *w65816) {
+			disp := int(int16(nnnn))
+			val := w.r.pc.plus(disp)
+			// 5, 6
+			w.PUSH16(val.offset, func(w *w65816) {})
+		}
 	})
 }
 
@@ -673,7 +715,9 @@ func op6B(w *w65816) {
 		// 3
 		w.state = CPU_DUMMY_READ
 		w.inst = func(w *w65816) {
+			// 4, 5
 			w.POP16(func(pc uint16) {
+				// 6
 				w.POP8(func(pb uint8) {
 					w.r.pc = u24(pb, pc).plus(1)
 				})
@@ -686,13 +730,11 @@ func op6B(w *w65816) {
 func op6C(w *w65816) {
 	// 2, 3
 	w.imm16(func(nnnn uint16) {
-		w.state = CPU_DUMMY_READ
-		w.inst = func(w *w65816) {
-			addr := u24(0, nnnn)
-			w.read16(addr, func(pc uint16) {
-				w.r.pc = u24(w.r.pc.bank, pc)
-			})
-		}
+		// 4, 5
+		addr := u24(0, nnnn)
+		w.read16(addr, func(pc uint16) {
+			w.r.pc = u24(w.r.pc.bank, pc)
+		})
 	})
 }
 
@@ -794,8 +836,11 @@ func op81(w *w65816) {
 
 // BRL disp16 (PC=PC+/-disp16)
 func op82(w *w65816) {
+	// 2, 3
 	w.imm16(func(val uint16) {
 		disp16 := int(int16(val))
+
+		// 4
 		w.state = CPU_DUMMY_READ
 		w.inst = func(w *w65816) {
 			w.r.pc = w.r.pc.plus(disp16)
@@ -1113,6 +1158,8 @@ func opC2(w *w65816) {
 		p := old & ^nn
 		// fmt.Printf("REP #%02x: 0x%02x -> 0x%02x in %s\n", nn, old, p, w.lastInstAddr)
 		w.r.p.setPacked(p)
+
+		// 3
 		addCycle(w.cycles, FAST)
 	})
 }
@@ -1195,11 +1242,16 @@ func opCA(w *w65816) {
 
 // WAI
 func opCB(w *w65816) {
-	if w.irqPending && w.r.p.i {
-		return
+	// 2
+	w.state = CPU_DUMMY_READ
+	w.inst = func(w *w65816) {
+		// 3
+		w.state = CPU_DUMMY_READ
+		w.inst = func(w *w65816) {
+			w.halted = true
+			addCycle(w.cycles, *w.nextEvent)
+		}
 	}
-	w.halted = true
-	addCycle(w.cycles, *w.nextEvent)
 }
 
 func opCC(w *w65816) {
@@ -1254,8 +1306,11 @@ func opD3(w *w65816) {
 
 // PEI
 func opD4(w *w65816) {
+	// 2 (or 3)
 	w.zeropage(func(addr uint24) {
+		// 3, 4
 		w.read16(addr, func(val uint16) {
+			// 5, 6
 			w.PUSH16(val, func(w *w65816) {})
 		})
 	})
@@ -1312,13 +1367,20 @@ func opDA(w *w65816) {
 }
 
 // STP
-func opDB(w *w65816) {}
+func opDB(w *w65816) {
+	// 2, 3
+	addCycle(w.cycles, FAST*2)
+}
 
 // JML(Jump Long, PB:PC=[00:nnnn])
 func opDC(w *w65816) {
+	// 2, 3
 	w.imm16(func(nnnn uint16) {
 		addr := u24(0, nnnn)
+
+		// 4, 5
 		w.read16(addr, func(ofs uint16) {
+			// 6
 			w.read8(addr.plus(2), func(bank uint8) {
 				w.r.pc = u24(bank, ofs)
 			})
@@ -1372,7 +1434,8 @@ func opE2(w *w65816) {
 		// fmt.Printf("SEP #%02x: 0x%02x -> 0x%02x in %s\n", nn, old, p, w.lastInstAddr)
 		w.r.p.setPacked(p)
 
-		w.dummyRead(func(w *w65816) {})
+		// 3
+		addCycle(w.cycles, FAST)
 	})
 }
 
@@ -1441,8 +1504,10 @@ func opEA(w *w65816) {
 
 // XBA (Swap low and high nibble in A)
 func opEB(w *w65816) {
+	// 2
 	w.state = CPU_DUMMY_READ
 	w.inst = func(w *w65816) {
+		// 3
 		w.state = CPU_DUMMY_READ
 		w.inst = func(w *w65816) {
 			w.r.a = (w.r.a >> 8) | (w.r.a << 8)

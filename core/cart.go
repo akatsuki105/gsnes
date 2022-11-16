@@ -59,6 +59,10 @@ func (c *cartridge) read(addr uint, defaultVal uint8) uint8 {
 	switch c.h.T {
 	case cart.LoROM:
 		idx = int(32*KB*bank + offset)
+		if idx > len(c.rom) {
+			idx &= len(c.rom) - 1
+		}
+
 	case cart.HiROM:
 		idx = int(64*KB*bank + offset)
 	case cart.ExHiROM:

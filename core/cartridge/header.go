@@ -3,7 +3,6 @@ package cartridge
 import (
 	"errors"
 	"fmt"
-	"unicode/utf8"
 )
 
 type RomType int
@@ -42,10 +41,10 @@ type Header struct {
 	version uint8
 
 	// FFDC..FFDDh
-	checksumc [2]uint8
+	checksumc uint16
 
 	// FFDE..FFDFh
-	checksum [2]uint8
+	checksum uint16
 }
 
 func NewHeader(romData []uint8) *Header {
@@ -62,6 +61,10 @@ func detectROMType(romData []uint8) RomType {
 		return HiROM
 	case isValidRomHeader(romData, ExHiROM):
 		return ExHiROM
+
+	// TODO
+	case len(romData) == 1572864:
+		return LoROM
 	}
 
 	return Unknown
@@ -80,41 +83,22 @@ func isValidRomHeader(romData []uint8, t RomType) bool {
 
 	hdr := romData[ofs : ofs+32]
 
-	// Title check
-	title := hdr[0:21]
-	for i := range title {
-		if title[i] == 0x00 {
-			title = title[0:i]
-			break
+	// compare checksum
+	expected := uint16(hdr[31])<<8 | uint16(hdr[30])
+
+	// calculate checksum
+	checksum := uint16(0)
+	for i := range romData {
+		switch i {
+		case ofs + 28, ofs + 29:
+			checksum += 0xFF
+		case ofs + 30, ofs + 31:
+		default:
+			checksum += uint16(romData[i])
 		}
 	}
-	titleStr := string(title)
-	if !(utf8.ValidString(titleStr) && utf8.RuneCountInString(titleStr) == len(titleStr)) {
-		return false
-	}
 
-	// Mapping check
-	mapping := hdr[21] & 0b1111
-	switch t {
-	case LoROM:
-		switch mapping {
-		case 0x00, 0x02, 0x03:
-			return true
-		}
-		return false
-
-	case HiROM:
-		switch mapping {
-		case 0x01, 0x0A:
-			return true
-		}
-		return false
-
-	case ExHiROM:
-		return mapping == 0x05
-	default:
-		return false
-	}
+	return expected == checksum
 }
 
 func (h *Header) load(romData []uint8) {
@@ -143,8 +127,8 @@ func (h *Header) load(romData []uint8) {
 	h.destination = destination(romHeader[0x19])
 	h.maker = romHeader[0x1a]
 	h.version = romHeader[0x1b]
-	h.checksumc = [2]uint8{}
-	h.checksum = [2]uint8{}
+	h.checksumc = uint16(romHeader[0x1d])<<8 | uint16(romHeader[0x1c])
+	h.checksum = uint16(romHeader[0x1f])<<8 | uint16(romHeader[0x1e])
 }
 
 func (m mapping) String() string {
@@ -173,6 +157,11 @@ func (h *Header) String() string {
 	romSize := formatSize((1 << h.romSize) * 1024)
 	ramSize := formatSize((1 << h.ramSize) * 1024)
 
+	ok := "OK"
+	if h.checksum != ^h.checksumc {
+		ok = "NG"
+	}
+
 	return fmt.Sprintf(`Title: %s
   ROM Size:     %s
   RAM Size:     %s
@@ -180,7 +169,8 @@ func (h *Header) String() string {
   Chipset:      %v
   Destination:  %s
   Maker:        %d
-  Version:      v1.%d`, title, romSize, ramSize, h.mapping, h.Chipset, h.destination, h.maker, h.version)
+  Version:      v1.%d
+  Checksum:     0x%04X(%s)`, title, romSize, ramSize, h.mapping, h.Chipset, h.destination, h.maker, h.version, h.checksum, ok)
 }
 
 func isSupportedCartridge(hdr []uint8) error {

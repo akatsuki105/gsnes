@@ -1,11 +1,20 @@
 package core
 
+/*
+GDMA timing refers to Anomie's SNES Timing Doc.
+https://www.romhacking.net/documents/199/
+*/
+
 var gdmaIncrements = [4]int{1, 0, -1, 0}
 
 type dmaController struct {
 	c              *sfc
 	gdmaen, hdmaen uint8
 	chans          [8]dmaChan
+
+	// For GDMA
+	pending bool  // GDMA pending
+	start   int64 // GDMA initalization cycle
 }
 
 func newDmaController(c *sfc) *dmaController {
@@ -26,8 +35,26 @@ func (c *dmaController) reset() {
 	}
 }
 
+func (c *dmaController) initGDMA() {
+	c.pending = false
+	c.start = c.c.s.Cycle()
+
+	w := c.c.w
+	w.lock = setBit(w.lock, BLOCK_DMA, true) // CPU block
+
+	// wait for 8x cycles
+	delay := int64(8-c.start%8) & 0b111
+	addCycle(w.cycles, delay)
+
+	addCycle(w.cycles, 8) // DMA initialization
+
+	c.update()
+}
+
 // MDMAEN を見ていって次にすべき GDMA を開始する
 func (c *dmaController) update() {
+	w := c.c.w
+
 	ch := -1
 	for i := 0; i < 8; i++ {
 		if bit(c.gdmaen, 7-i) {
@@ -35,9 +62,35 @@ func (c *dmaController) update() {
 		}
 	}
 	if ch >= 0 {
-		c.chans[ch].trigger(false)
+		ch := &c.chans[ch]
+		c.c.s.ReSchedule(&ch.event, 8) // each channel takes 8 cycles for initialization
 		return
 	}
+
+	// All GDMA complete
+
+	// To reach a whole number of CPU Clock cycles since the pause
+	now, clock := c.c.s.Cycle(), w.wait(w.r.pc)
+	delay := now % clock
+	if delay == 0 {
+		// 0 is not an option
+		delay = clock
+	}
+	addCycle(w.cycles, delay)
+
+	w.lock = setBit(w.lock, BLOCK_DMA, false)
+}
+
+func (c *dmaController) reloadHDMA() int64 {
+	cycles := int64(0)
+	for i := 0; i < 8; i++ {
+		if bit(c.hdmaen, i) {
+			d := &c.chans[i]
+			d.a2ax = d.bus.a.offset
+			cycles += d.loadHDMATable()
+		}
+	}
+	return cycles
 }
 
 // addr: 0x00..7F
@@ -57,18 +110,18 @@ func (c *dmaController) readIO(addr uint, defaultVal uint8) uint8 {
 	case 0x05, 0x06, 0x07: // DASx
 		switch r - 0x05 {
 		case 0:
-			return uint8(ch.remaining)
+			return uint8(ch.dasx.offset)
 		case 1:
-			return uint8(ch.remaining >> 8)
+			return uint8(ch.dasx.offset >> 8)
 		case 2:
-			return 0
+			return ch.dasx.bank
 		}
 
 	case 0x08, 0x09: // A2Ax
-		return uint8(ch.table.addr.offset >> (8 * (r - 0x08)))
+		return uint8(ch.a2ax >> (8 * (r - 0x08)))
 
 	case 0x0A: // NTRLx
-		return ch.table.hdr
+		return ch.ntrlx.u8()
 
 	case 0x0B, 0x0F: // UNUSEDx
 		return ch.ram
@@ -100,26 +153,27 @@ func (c *dmaController) writeIO(addr uint, val uint8) {
 		}
 
 	case 0x05, 0x06, 0x07: // DASx
-		old := ch.remaining
+		old := uint16(ch.dasx.offset)
 		switch r - 0x05 {
 		case 0:
-			ch.remaining = (old & 0x1FF00) | uint32(val)
+			ch.dasx.offset = (old & 0xFF00) | uint16(val)
 		case 1:
-			ch.remaining = uint32(val)<<8 | (old & 0x100FF)
+			ch.dasx.offset = uint16(val)<<8 | (old & 0x00FF)
 		case 2:
-			ch.table.bank = val
+			ch.dasx.bank = val
 		}
 
 	case 0x08, 0x09: // A2Ax
+		old := ch.a2ax
 		switch r - 0x08 {
 		case 0:
-			// TODO
+			ch.a2ax = (old & 0xFF00) | uint16(val)
 		case 1:
-
-			// TODO
+			ch.a2ax = uint16(val)<<8 | (old & 0x00FF)
 		}
+
 	case 0x0A: // NTRLx
-		// TODO
+		ch.ntrlx = ntrlx(val)
 
 	case 0x0B, 0x0F: // UNUSEDx
 		ch.ram = val

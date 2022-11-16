@@ -12,7 +12,7 @@ var rotates = [4]uint16{0, 8, 9, 10}
 var increments = [4]uint16{1, 32, 64, 128}
 
 type vram struct {
-	buf        [VRAM_SIZE / 2]uint16
+	buf        []uint16
 	idx        uint16    // Unit is word
 	incType    increment // VMAIN.7
 	rotate     uint16    // VMAIN.2-3
@@ -22,9 +22,7 @@ type vram struct {
 }
 
 func (v *vram) reset() {
-	for i := range v.buf {
-		v.buf[i] = 0
-	}
+	v.buf = make([]uint16, VRAM_SIZE/2)
 	v.idx = 0
 	v.incType = INC_LOW
 	v.rotate = rotates[0b11]

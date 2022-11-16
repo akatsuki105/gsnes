@@ -22,12 +22,9 @@ func (w *w65816) imm16(fn func(nnnn uint16)) {
 }
 
 func (w *w65816) imm24(fn func(addr uint24)) {
-	w.imm8(func(lo uint8) {
-		w.imm8(func(hi uint8) {
-			ofs := uint16(hi)<<8 | uint16(lo)
-			w.imm8(func(bank uint8) {
-				fn(u24(bank, ofs))
-			})
+	w.imm16(func(ofs uint16) {
+		w.imm8(func(bank uint8) {
+			fn(u24(bank, ofs))
 		})
 	})
 }
@@ -129,17 +126,14 @@ func (w *w65816) absoluteX(fn func(addr uint24)) {
 //	Alias:   `a,y`
 //	Example:  0xB9
 func (w *w65816) absoluteY(fn func(addr uint24)) {
-	w.imm8(func(lo uint8) {
-		w.imm8(func(hi uint8) {
-			nnnn := uint16(w.bus.data)<<8 | uint16(lo) // AAH
-			// penalty cycle when crossing 8-bit page boundaries:
-			if nnnn>>8 != (nnnn+w.r.y)>>8 {
-				addCycle(w.cycles, FAST) // 3a
-			}
+	w.imm16(func(nnnn uint16) {
+		// penalty cycle when crossing 8-bit page boundaries:
+		if nnnn>>8 != (nnnn+w.r.y)>>8 {
+			addCycle(w.cycles, FAST) // 3a
+		}
 
-			addr := u24(w.r.db, nnnn).plus(int(w.r.y)) // DB:(nnnn+Y)
-			fn(addr)
-		})
+		addr := u24(w.r.db, nnnn).plus(int(w.r.y)) // DB:(nnnn+Y)
+		fn(addr)
 	})
 }
 

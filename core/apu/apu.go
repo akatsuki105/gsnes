@@ -23,7 +23,7 @@ type apu struct {
 	ram           [0x10000]byte
 	romReadable   bool
 	dspAddr       byte
-	cycles        uint32
+	cycles        uint32 // (SPC700's )CPU cycles = 1 / 1.024 * 1000 * 1000 sec
 	inPorts       [6]byte
 	outPorts      [4]byte
 	timer         [3]Timer
@@ -66,7 +66,7 @@ func (apu *apu) Cycle() {
 	apu.cpuCyclesLeft--
 
 	if (apu.cycles & 0x1F) == 0 {
-		// every 32 cycles
+		// every 32 CPU cycles = (1 / 32000) sec
 		apu.dsp.Cycle()
 	}
 

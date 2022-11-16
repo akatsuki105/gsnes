@@ -1,9 +1,11 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	"strings"
 	"unsafe"
 
@@ -18,44 +20,37 @@ type SuperFamicom interface {
 	// RunFrame runs emulator until a next frame
 	RunFrame()
 
-	// Run emulator for a single step
-	Run()
+	// Run emulator for a single instruction
+	RunInst()
 
-	// Run emulator until next event or for max cycles
-	RunLoop(max int64)
-
-	// SetKeyInput sends key state into core
+	// Sends key state into core
 	SetKeyInput(key string, press bool)
 
-	// LoadROM loads game rom
-	//
-	// It assumes an environment with enough memory, so it is necessary to pass the complete ROM data in advance.
-	//
-	// NOTE: romData is mutable(not copied).
+	// Load game rom.
 	LoadROM(romData []byte) error
 
-	// PC returns current Program counter.
-	//
-	// NOTE: Prefetch is ignored.
+	// PC returns current Program counter(Prefetch is ignored)
 	PC() uint32
 
 	// Display resolution
 	Resolution() (w int, h int)
 
-	// FrameBuffer return framebuffer represents game screen
+	// Return framebuffer represents game screen
 	FrameBuffer() []iro.RGB555
 
 	Pause(p bool)
 	Paused() bool
 
-	debug
+	// Debug feature
+
+	// Replace builtin memory buffer by your buffer.
+	MMap(region string, buf []uint8) error
+
+	Debug
 }
 
-type debug interface {
-	// Get raw memory array(editable)
-	//  Region: "ROM", "WRAM", "VRAM", "PALETTE"
-	MemoryBuffer(region string) (buffer unsafe.Pointer, length int)
-
+// 完成時には消す
+type Debug interface {
 	// Region: "SYSTEM", "CPU", "PPU", "SCREEN", "EVENTS"
 	Status(region string) string
 
@@ -63,14 +58,15 @@ type debug interface {
 }
 
 type sfc struct {
-	w     *w65816
-	ppu   *ppu
-	apu   *apu
-	s     *scheduler.Scheduler
-	frame int // frame counter
-	pause bool
-	dma   *dmaController
-	m     *memory
+	w         *w65816
+	ppu       *ppu
+	apu       *apu
+	s         *scheduler.Scheduler
+	frame     int // frame counter
+	pause     bool
+	dma       *dmaController
+	m         *memory
+	earlyExit bool
 }
 
 func New() SuperFamicom {
@@ -100,24 +96,29 @@ func (s *sfc) Reset() error {
 	s.apu.reset()
 	s.dma.reset()
 	s.frame = 0
+	s.earlyExit = false
 	return nil
 }
 
 func (s *sfc) LoadROM(romData []uint8) error {
+	rom := make([]uint8, len(romData))
+	copy(rom, romData)
 	c := s.w.cart
-	c.loadROM(romData)
+	c.loadROM(rom)
 	s.Reset()
 	return nil
 }
 
 // RunFrame runs emulator until a next frame
 func (s *sfc) RunFrame() {
+	defer s.panicHandler(true)
+
 	const FRAME = SCANLINE * 4 * TOTAL_SCANLINE
 	start := s.s.Cycle()
 
 	old := s.frame
 	for old == s.frame && s.s.Cycle()-start < FRAME {
-		s.RunLoop(math.MaxInt64)
+		s.run()
 		if s.pause {
 			break
 		}
@@ -126,9 +127,15 @@ func (s *sfc) RunFrame() {
 }
 
 // Run emulator for a single instruction
-func (s *sfc) Run() {
+func (s *sfc) RunInst() {
 	old := s.pause
 	s.pause = false
+	defer func() { s.pause = old }()
+
+	if s.w.checkIrq(NMI) || s.w.checkIrq(IRQ) {
+		return
+	}
+
 	for {
 		for s.s.AnyEvent() {
 			s.processEvents()
@@ -138,7 +145,6 @@ func (s *sfc) Run() {
 			break
 		}
 	}
-	s.pause = old
 }
 
 // Run all scheduled events
@@ -149,7 +155,7 @@ func (s *sfc) processEvents() {
 		nextEvent = 0
 
 		first := true
-		for first || s.w.blocked {
+		for first || (s.w.blocked() && !s.earlyExit) {
 			first = false
 
 			cycles := s.s.RelativeCycles
@@ -165,36 +171,40 @@ func (s *sfc) processEvents() {
 		s.s.NextEvent = nextEvent
 		if s.w.halted {
 			*s.w.cycles = nextEvent
+			if s.w.r.p.i || (s.w.nmitimen>>4)&0b11 == 0 {
+				break
+			}
+		}
+
+		if s.earlyExit {
 			break
 		}
 	}
 
-	if s.w.blocked {
+	s.earlyExit = false
+	if s.w.blocked() {
 		s.s.RelativeCycles = s.s.NextEvent
 	}
 }
 
-// Run emulator until next event or for max cycles
-func (s *sfc) RunLoop(max int64) {
-	start := s.s.Cycle()
+// Run emulator until next event
+func (s *sfc) run() {
 	running := true
-
 	for running || s.w.state != CPU_FETCH {
 		if s.w.state == CPU_FETCH {
 			if s.w.checkIrq(NMI) || s.w.checkIrq(IRQ) {
 				break
 			}
+			if s.dma.pending {
+				s.dma.initGDMA()
+			}
 		}
+
 		if s.s.RelativeCycles < s.s.NextEvent {
 			running = s.w.step() && running
 		} else {
 			s.processEvents()
 			running = false
-		}
-
-		now := s.s.Cycle()
-		if now-start >= max {
-			break
 		}
 	}
 }
@@ -215,33 +225,23 @@ func (s *sfc) FrameBuffer() []iro.RGB555 {
 	return s.ppu.r.frameBuffer()
 }
 
-func (s *sfc) MemoryBuffer(region string) (buffer unsafe.Pointer, length int) {
-	switch region {
-	case "ROM":
-		return unsafe.Pointer(&s.w.cart.rom[0]), len(s.w.cart.rom)
-	case "WRAM":
-		return unsafe.Pointer(&s.w.wram.buf[0]), len(s.w.wram.buf)
-	case "VRAM":
-		return unsafe.Pointer(&s.ppu.vram.buf[0]), len(s.ppu.vram.buf) * 2
-	case "PALETTE":
-		return unsafe.Pointer(&s.ppu.pal.buf[0]), len(s.ppu.pal.buf) * 2
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown region: %s", region)
-		return nil, 0
-	}
-}
-
 func (s *sfc) Status(region string) string {
 	region = strings.ToUpper(region)
 	switch region {
 	case "SYSTEM":
-		return fmt.Sprintf("Cycle: %d", s.s.Cycle())
+		result := `Cycle: %d
+GDMA: %s, HDMA: %s`
+		return fmt.Sprintf(result, s.s.Cycle(), bitField(s.dma.gdmaen), bitField(s.dma.hdmaen))
+
 	case "CPU":
 		return s.w.Status()
+
 	case "PPU", "SCREEN", "OAM":
 		return s.ppu.Status(region)
+
 	case "EVENTS":
 		return s.s.String()
+
 	default:
 		return ""
 	}
@@ -300,5 +300,59 @@ func (s *sfc) SetKeyInput(key string, press bool) {
 		j[12-4] = press
 	case "SELECT":
 		j[13-4] = press
+	}
+}
+
+func (s *sfc) MMap(region string, buf []uint8) error {
+	switch region {
+	case "WRAM":
+		if len(buf) != int(128*KB) {
+			return errors.New("WRAM buffer must be 128KB")
+		}
+
+		copy(buf, s.w.wram.buf[:])
+		s.w.wram.buf = buf
+
+	case "VRAM":
+		if len(buf) != int(VRAM_SIZE) {
+			return errors.New("VRAM buffer must be 64KB")
+		}
+
+		buf16 := (*[VRAM_SIZE / 2]uint16)(unsafe.Pointer(&buf[0]))
+		copy(buf16[:], s.ppu.vram.buf[:])
+		s.ppu.vram.buf = buf16[:]
+
+	case "PALETTE":
+		if len(buf) != int(PAL_SIZE) {
+			return errors.New("palette buffer must be 512B")
+		}
+
+		buf16 := (*[PAL_SIZE / 2]iro.RGB555)(unsafe.Pointer(&buf[0]))
+		copy(buf16[:], s.ppu.pal.buf[:])
+		s.ppu.pal.buf = buf16[:]
+	}
+
+	return errors.New("invalid region")
+}
+
+func (s *sfc) panicHandler(stack bool) {
+	if err := recover(); err != nil {
+		fmt.Fprintf(os.Stderr, "Panic in %v\n", s.w.lastInstAddr)
+		fmt.Fprintf(os.Stderr, "         %s\n", err)
+
+		size := len(histories)
+		fmt.Fprintln(os.Stderr, "         History:")
+		for i := range histories {
+			fmt.Fprintf(os.Stderr, "           %s\n", histories[size-1-i])
+		}
+
+		for depth := 3; ; depth++ {
+			_, file, line, ok := runtime.Caller(depth)
+			if !ok {
+				break
+			}
+			fmt.Fprintf(os.Stderr, "======> %d: %v:%d\n", depth, file, line)
+		}
+		os.Exit(1)
 	}
 }

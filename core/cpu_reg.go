@@ -48,6 +48,10 @@ func (r *reg) setEmulation(e bool) {
 
 func (r *reg) l(r16 *uint16, val uint8) {
 	*r16 = (*r16 & 0xFF00) | uint16(val)
+	if r.p.x {
+		r.x &= 0x00FF
+		r.y &= 0x00FF
+	}
 }
 
 func (r *reg) vector(e exception) uint24 {

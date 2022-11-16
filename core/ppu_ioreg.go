@@ -52,8 +52,7 @@ func (p *ppu) readIO(addr uint, defaultVal uint8) uint8 {
 		val := uint8(0x03)
 		val = setBit(val, 6, r.latch)
 		r.latch = false
-		p.opct[0].second = false
-		p.opct[1].second = false
+		p.opct[0].second, p.opct[1].second = false, false
 		p.openbus[1] = setBit(val, 7, r.interlace)
 		return p.openbus[1]
 
@@ -123,14 +122,16 @@ func (p *ppu) writeIO(addr uint, val uint8) {
 		p.r.bg4.tileDataAddr = uint((val>>4)&0b1111) * (8 * KB)
 
 	case 0x0D, 0x0F, 0x11, 0x13: // BGnHOFS
-		bg := [4]*bg{bg1, bg2, bg3, bg4}[(addr-0x0D)/2]._bg
+		n := (addr - 0x0D) / 2
+		bg := [4]*bg{bg1, bg2, bg3, bg4}[n]
 		prev := uint16(bg.sc[0].prev)
 		bg.sc[0].prev = val
 		bg.sc[0].reg = (uint16(val) << 8) | (prev & 0xFFF8) | ((bg.sc[0].reg >> 8) & 7)
 		bg.sc[0].val = bg.sc[0].reg & 0x3FF
 
 	case 0x0E, 0x10, 0x12, 0x14: // BGnVOFS
-		bg := [4]*bg{bg1, bg2, bg3, bg4}[(addr-0x0E)/2]._bg
+		n := (addr - 0x0E) / 2
+		bg := [4]*bg{bg1, bg2, bg3, bg4}[n]
 		prev := uint16(bg.sc[1].prev)
 		bg.sc[1].prev = val
 		bg.sc[1].reg = (uint16(val)<<8 | prev)
@@ -163,9 +164,10 @@ func (p *ppu) writeIO(addr uint, val uint8) {
 			ab := uint32(a * b)
 			p.mpy.result = toU24(ab)
 		}
+
 		if p.mpy.second {
 			p.mpy.second = false
-			p.mpy.a = uint16(val)<<8 | (p.mpy.a & 0xFF)
+			p.mpy.a = uint16(val)<<8 | (p.mpy.a & 0x00FF)
 			mul(int(int16(p.mpy.a)))
 			return
 		}
@@ -174,8 +176,9 @@ func (p *ppu) writeIO(addr uint, val uint8) {
 		mul(int(int16(p.mpy.a)))
 
 	case 0x1C: // M7B
+		p.mpy.b = val
 		a := int(int16(p.mpy.a))
-		b := int(int8(val))
+		b := int(int8(p.mpy.b))
 		ab := uint32(a * b)
 		p.mpy.result = toU24(ab)
 
@@ -183,6 +186,32 @@ func (p *ppu) writeIO(addr uint, val uint8) {
 		p.pal.setAddr(val)
 	case 0x22: // CGDATA
 		p.pal.write(val)
+
+	case 0x23, 0x24, 0x25: // W12SEL, W34SEL, WOBJSEL
+		i := (addr - 0x23) * 2
+		p.r.w.win1.mask[i+0] = windowMask(val >> 0)
+		p.r.w.win2.mask[i+0] = windowMask(val >> 2)
+		p.r.w.win1.mask[i+1] = windowMask(val >> 4)
+		p.r.w.win2.mask[i+1] = windowMask(val >> 6)
+
+	case 0x26: // WH0
+		p.r.w.win1.left = val
+	case 0x27: // WH1
+		p.r.w.win1.right = val
+	case 0x28: // WH2
+		p.r.w.win2.left = val
+	case 0x29: // WH3
+		p.r.w.win2.right = val
+
+	case 0x2A: // WBGLOG
+		p.r.w.logic[0] = maskLogic((val >> 0) & 0b11)
+		p.r.w.logic[1] = maskLogic((val >> 2) & 0b11)
+		p.r.w.logic[2] = maskLogic((val >> 4) & 0b11)
+		p.r.w.logic[3] = maskLogic((val >> 6) & 0b11)
+
+	case 0x2B: // WOBJLOG
+		p.r.w.logic[4] = maskLogic((val >> 0) & 0b11)
+		p.r.w.logic[5] = maskLogic((val >> 2) & 0b11)
 
 	case 0x2C: // TM
 		bg1.mainsc = bit(val, 0)

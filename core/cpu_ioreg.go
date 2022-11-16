@@ -12,21 +12,16 @@ func (w *w65816) readCPU(addr uint, defaultVal uint8) uint8 {
 		return 0b11111
 
 	case 0x4210: // RDNMI
-		val := uint8(0x02)
-		val |= w.bus.data & 0b0111_0000
-		if w.nmi {
-			w.nmi = false
-			val = setBit(val, 7, true)
-		}
-		return val
+		old := w.rdnmi
+		openbus := w.bus.data & 0b0111_0000
+		w.rdnmi = setBit(w.rdnmi, 7, false) // ACK
+		return old | openbus
 
 	case 0x4211: // TIMEUP
-		val := w.bus.data & 0x7F
-		if w.irqPending {
-			w.irqPending = false
-			val = setBit(val, 7, true)
-		}
-		return val
+		val := w.timeup & 0x80
+		openbus := w.bus.data & 0x7F
+		w.timeup = setBit(w.timeup, 7, false)
+		return val | openbus
 
 	case 0x4212: // HVBJOY
 		val := w.bus.data & 0b0011_1110
@@ -39,7 +34,10 @@ func (w *w65816) readCPU(addr uint, defaultVal uint8) uint8 {
 		return 0x00
 
 	case 0x4214, 0x4215: // RDDIV
-		return uint8(w.mpy.result >> (8 * (addr - 0x4214)))
+		return uint8(w.div.result >> (8 * (addr - 0x4214)))
+
+	case 0x4216, 0x4217: // RDMPY
+		return uint8(w.mul.result >> (8 * (addr - 0x4216)))
 
 	case 0x4218, 0x4219: // JOY1
 		return uint8(w.joypads[0].val >> (8 * (addr - 0x4218)))
@@ -65,13 +63,19 @@ func (w *w65816) writeCPU(addr uint, val uint8) {
 		// TODO
 
 	case 0x4200: // NMITIMEN
+		old := bit(w.nmitimen, 7) && bit(w.rdnmi, 7)
 		w.nmitimen = val
-		w.autoJoypadRead = bit(val, 0)
-		w.hIrq, w.vIrq = bit(val, 4), bit(val, 5)
-		if !w.hIrq && !w.vIrq {
-			w.irqPending = false
+
+		// If IRQ is disabled, ack IRQ
+		hIrq, vIrq := bit(val, 4), bit(val, 5)
+		if !hIrq && !vIrq {
+			w.timeup = setBit(w.timeup, 7, false)
 		}
-		w.nmiEnable = bit(val, 7)
+
+		now := bit(w.nmitimen, 7) && bit(w.rdnmi, 7)
+		if !old && now {
+			w.nmiPending = true
+		}
 
 	case 0x4201: // WRIO
 		prev := bit(w.wrio, 7)
@@ -81,18 +85,50 @@ func (w *w65816) writeCPU(addr uint, val uint8) {
 		}
 
 	case 0x4202: // WRMPYA
-		w.mpy.a = val
+		w.mul.a = val
 
 	case 0x4203: // WRMPYB
-		addCycle(w.cycles, FAST*8)
-		w.mpy.result = uint16(val) * uint16(w.mpy.a)
+		cycles := int64(8)
+		for i := 0; i < 8; i++ {
+			if bit(w.mul.a, 7-i) {
+				break
+			}
+			cycles--
+		}
+
+		schedule("Mul", w.c.s, func(_ int64) {
+			w.mul.result = uint16(val) * uint16(w.mul.a)
+			w.div.result = uint16(val)
+		}, FAST*cycles)
+
+	case 0x4204, 0x4205: // WRDIV
+		dividend := w.div.dividend
+		switch addr {
+		case 0x4204:
+			w.div.dividend = (dividend & 0xFF00) | uint16(val)
+		case 0x4205:
+			w.div.dividend = (uint16(val) << 8) | (dividend & 0x00FF)
+		}
+
+	case 0x4206: // WRDIVB
+		rddiv, rdmpy := uint16(0xFFFF), w.div.dividend
+		if val != 0 {
+			// not zerodiv
+			rddiv = w.div.dividend / uint16(val)
+			rdmpy = w.div.dividend % uint16(val)
+		}
+
+		schedule("Div", w.c.s, func(_ int64) {
+			w.div.result = rddiv
+			w.mul.result = rdmpy
+		}, FAST*16)
 
 	case 0x4207, 0x4208: // HTIME
 		switch addr - 0x4207 {
 		case 0:
-			p.htime = (p.htime & 0x00FF) | (uint16(val&0b1) << 8)
-		case 1:
 			p.htime = (p.htime & 0xFF00) | uint16(val)
+		case 1:
+			p.htime = (uint16(val&0b1) << 8) | (p.htime & 0x00FF)
 		}
 		if p.htime > 339 {
 			crash("htime overflow (%d)", p.htime)
@@ -101,9 +137,9 @@ func (w *w65816) writeCPU(addr uint, val uint8) {
 	case 0x4209, 0x420A: // VTIME
 		switch addr - 0x4209 {
 		case 0:
-			p.vtime = (p.vtime & 0x00FF) | (uint16(val&0b1) << 8)
-		case 1:
 			p.vtime = (p.vtime & 0xFF00) | uint16(val)
+		case 1:
+			p.vtime = (uint16(val&0b1) << 8) | (p.vtime & 0x00FF)
 		}
 		if p.vtime > 261 {
 			crash("vtime overflow (%d)", p.vtime)
@@ -111,7 +147,9 @@ func (w *w65816) writeCPU(addr uint, val uint8) {
 
 	case 0x420B: // MDMAEN
 		w.c.dma.gdmaen = val
-		w.c.dma.update()
+		if w.c.dma.gdmaen != 0 {
+			w.c.dma.pending = true
+		}
 
 	case 0x420C: // HDMAEN
 		w.c.dma.hdmaen = val

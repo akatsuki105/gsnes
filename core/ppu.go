@@ -15,10 +15,11 @@ type ppu struct {
 	pal            palette
 	oam            oam
 	mode           uint8  // BGMODE
-	hcount, vcount uint16 // 0..340, 0..261
+	hcount, vcount uint16 // 0..339, 0..261
 	htime, vtime   uint16 // 0x4207, 0x4209
 	event          scheduler.Event
 	irqEvent       scheduler.Event
+	nmiEvent       scheduler.Event
 
 	inHBlank, inVBlank bool // HVBJOY.6, HVBJOY.7
 
@@ -48,10 +49,14 @@ func newPpu(c *sfc) *ppu {
 	p := &ppu{
 		c:     c,
 		event: *scheduler.NewEvent(EVENT_VIDEO, nil, EVENT_VIDEO_PRIO),
+		pal:   *newPalette(),
 	}
 	p.r = newRenderer(&p.vram, &p.pal, &p.oam)
 	p.opct[0].count, p.opct[1].count = 0x1FF, 0x1FF
+
 	p.irqEvent = *scheduler.NewEvent(EVENT_IRQ, p.requestIrq, EVENT_IRQ_PRIO)
+	p.nmiEvent = *scheduler.NewEvent(EVENT_NMI, p.setNMI, EVENT_NMI_PRIO)
+
 	return p
 }
 
@@ -72,24 +77,31 @@ func (p *ppu) reset() {
 }
 
 // (x, y) = (0, any)
-func (p *ppu) newline() {
+func (p *ppu) newline(cyclesLate int64) {
 	p.vcount++
-	if p.vcount == TOTAL_SCANLINE {
-		p.vcount = 0
-
-		// toggle interlace frame
-		p.stat78.interlace = !p.stat78.interlace
-	}
 
 	switch p.vcount {
 	case VERTICAL + 1:
 		// start VBlank
-		p.setVBlank(true)
+		p.setVBlank(true, cyclesLate)
+		p.c.earlyExit = true
 		p.c.frame++
 
-	case TOTAL_SCANLINE - 1:
-		// End of VBlank
-		p.setVBlank(false)
+	case TOTAL_SCANLINE:
+		p.vcount = 0
+		p.setVBlank(false, cyclesLate) // End of VBlank
+	}
+}
+
+func (p *ppu) setNMI(cyclesLate int64) {
+	w := p.c.w
+	old := bit(w.nmitimen, 7) && bit(w.rdnmi, 7)
+	p.c.w.rdnmi = setBit(p.c.w.rdnmi, 7, true)
+
+	// NMITIMEN.7 & RDNMI.7 が 0 から 1 になったなら 内部NMIフラグをセットする
+	now := bit(w.nmitimen, 7) && bit(w.rdnmi, 7)
+	if !old && now {
+		w.nmiPending = true
 	}
 }
 
@@ -101,27 +113,39 @@ func (p *ppu) startHBlank() {
 	}
 }
 
-func (p *ppu) setVBlank(b bool) {
+func (p *ppu) setVBlank(b bool, cyclesLate int64) {
 	if b {
+		// (H, V) = (0, 225)
 		p.inVBlank = true
-		p.c.w.nmi = true
-		p.c.w.nmiPending = true
+		p.c.s.Schedule(&p.nmiEvent, 2-cyclesLate) // (H, V) = (0.5, 225)
 		return
 	}
 
+	// (H, V) = (0, 0)
 	p.inVBlank = false
-	p.c.w.nmi = false
+	p.c.w.rdnmi = setBit(p.c.w.rdnmi, 7, false) // Auto ACK
 }
 
 func (p *ppu) incrementHCount(cyclesLate int64) {
 	w := p.c.w
+	dma := w.c.dma
 
 	p.hcount++
 	switch p.hcount {
 	case 1:
 		p.inHBlank = false
+		if p.vcount == 0 {
+			// toggle interlace frame
+			p.stat78.interlace = !p.stat78.interlace
+		}
 
 	case 6:
+		if p.vcount == 0 {
+			cycles := dma.reloadHDMA()
+			if cycles > 0 {
+				w.block(BLOCK_HDMA, cycles, cyclesLate)
+			}
+		}
 
 	case 10:
 		if p.vcount == 225 {
@@ -132,7 +156,7 @@ func (p *ppu) incrementHCount(cyclesLate int64) {
 
 	case 32:
 		if p.vcount == 225 {
-			if w.autoJoypadRead {
+			if autoJoypadRead := bit(w.nmitimen, 0); autoJoypadRead {
 				w.ajr = true
 				for i := range w.joypads {
 					j := &w.joypads[i]
@@ -148,29 +172,39 @@ func (p *ppu) incrementHCount(cyclesLate int64) {
 			w.ajr = false
 		}
 
+	// DRAM Refresh
 	case 133:
-		w.blocked = true
-
-	case 143:
-		w.blocked = false
+		w.block(BLOCK_DRAM, 40, cyclesLate)
 
 	case 274:
 		p.startHBlank()
 
 	case 278:
 		if p.vcount < 225 {
-			hdmaen := w.c.dma.hdmaen
+			// (H, V) = (278, 0..224)
+			// perform HDMA transfers
+			hdmaen := dma.hdmaen
+
+			cycles := int64(0)
+			if hdmaen != 0 {
+				cycles = 18
+			}
+
 			for i := 0; i < 8; i++ {
 				if bit(hdmaen, i) {
-					w.c.dma.chans[i].runHDMA()
+					cycles += dma.chans[i].runHDMA()
 				}
+			}
+
+			if cycles > 0 {
+				w.block(BLOCK_HDMA, cycles, cyclesLate)
 			}
 		}
 
 	case 340:
 		// new line
 		p.hcount = 0
-		p.newline()
+		p.newline(cyclesLate)
 	}
 	p.checkIrq(cyclesLate)
 
@@ -181,16 +215,22 @@ func (p *ppu) checkIrq(cyclesLate int64) {
 	nmitimen := p.c.w.nmitimen
 	requested := false
 	after := int64(0)
+
 	switch (nmitimen >> 4) & 0b11 {
 	case 1:
+		// H-IRQ
 		requested = p.hcount == p.htime
-		after = 14
+		after = 14 // (H, V) = (HTIME+3.5, any)
+
 	case 2:
+		// V-IRQ
 		requested = p.hcount == 0 && p.vcount == p.vtime
-		after = 10
+		after = 10 // (H, V) = (2.5, VTIME)
+
 	case 3:
+		// HV-IRQ
 		requested = p.hcount == p.htime && p.vcount == p.vtime
-		after = 14
+		after = 14 // (H, V) = (HTIME+3.5, VTIME)
 	}
 
 	if requested {
@@ -199,7 +239,8 @@ func (p *ppu) checkIrq(cyclesLate int64) {
 }
 
 func (p *ppu) requestIrq(cyclesLate int64) {
-	p.c.w.irqPending = true
+	w := p.c.w
+	w.timeup = setBit(w.timeup, 7, true)
 }
 
 func (p *ppu) latchHV() {

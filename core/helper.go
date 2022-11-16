@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/pokemium/gsnes/core/scheduler"
 )
 
 const (
@@ -17,6 +19,11 @@ func addCycle(c *int64, masterCycles int64) {
 	if c != nil {
 		*c += masterCycles
 	}
+}
+
+func schedule(name string, s *scheduler.Scheduler, fn func(cyclesLate int64), after int64) {
+	e := scheduler.NewEvent(scheduler.EventName(name), fn, EVENT_TMP_PRIO)
+	s.Schedule(e, after)
 }
 
 // FormatSize convert 1024 into "1KB"
@@ -48,7 +55,7 @@ func bit[V uint | uint8 | uint16 | uint32 | uint64 | int | int8 | int16 | int32 
 	return (val & (1 << idx)) != 0
 }
 
-func setBit[V uint | uint8 | uint16 | uint32](val V, idx int, b bool) V {
+func setBit[V uint | uint8 | uint16 | uint32 | int8](val V, idx int, b bool) V {
 	old := val
 	if b {
 		val = old | (1 << idx)
@@ -100,4 +107,34 @@ func btos(b bool) string {
 		return "OK"
 	}
 	return "NG"
+}
+
+func bitField(val interface{}) string {
+	result := ""
+	b := map[bool]string{true: "1", false: "0"}
+	switch val := val.(type) {
+	case uint8:
+		for i := 7; i >= 0; i-- {
+			result += b[bit(val, i)]
+		}
+	case uint16:
+		for i := 16; i >= 0; i-- {
+			result += b[bit(val, i)]
+		}
+	case uint32:
+		for i := 32; i >= 0; i-- {
+			result += b[bit(val, i)]
+		}
+	case uint64:
+		for i := 64; i >= 0; i-- {
+			result += b[bit(val, i)]
+		}
+	case uint:
+		for i := 64; i >= 0; i-- {
+			result += b[bit(val, i)]
+		}
+	default:
+		panic("invalid type")
+	}
+	return result
 }

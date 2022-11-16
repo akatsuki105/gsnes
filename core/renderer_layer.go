@@ -56,8 +56,8 @@ type _bg struct {
 	index         int  // 1..4 (BG1, BG2, BG3, BG4)
 	mainsc, subsc bool
 	size          [2]uint16 // Screen size(BGnSC), 0: X(32 or 64), 1: Y(32 or 64)
-	tileDataAddr  uint      // BG12NBA, BG34NBA
-	tilemapAddr   uint      // BGnSC
+	tileDataAddr  uint      // BG12NBA, BG34NBA, Unit is byte (Ignored in mode7)
+	tilemapAddr   uint      // BGnSC, Unit is byte
 	tilesize      uint16    // BGMODE.4-7, 8(8x8) or 16(16x16)
 	palOfs        int
 	sc            [2]scroll // 0: X, 1: Y
@@ -97,8 +97,9 @@ func (b *bg) isSub() bool {
 }
 
 func (b *bg) drawScanline(buf []iro.RGB555, y uint16, start, end int) {
-	bgmap := b.r.vram.buf[b.tilemapAddr/2:]
-	tiledata := b.r.vram.buf[b.tileDataAddr/2:]
+	vram := b.r.vram.buf
+	bgmap := vram[(b.tilemapAddr/2)&0x7FFF:]
+
 	scx, scy := b.sc[0].val, b.sc[1].val
 
 	y = (y + scy) % (b.size[1] * 8)
@@ -134,6 +135,7 @@ func (b *bg) drawScanline(buf []iro.RGB555, y uint16, start, end int) {
 			entry := bgmap[idx]
 
 			tileID := (entry & 1023) + ofs16[quadrant]
+
 			palID := int((entry >> 10) & 0b111)
 			hflip, vflip := bit(entry, 14), bit(entry, 15)
 
@@ -146,7 +148,9 @@ func (b *bg) drawScanline(buf []iro.RGB555, y uint16, start, end int) {
 				ofs := b.palOfs + (4 * palID)
 				pal := b.r.pal.buf[ofs : ofs+4]
 
-				tile := tiledata[8*tileID : (8*tileID)+8] // 2bpp: 1タイル = 16バイト
+				tileStart := ((b.tileDataAddr / 2) + 8*uint(tileID)) & 0x7FFF
+				tile := vram[tileStart : tileStart+8] // 2bpp: 1タイル = 16バイト
+
 				flipedY := flip(8, vflip, int(y&0b111))
 				rowdata := tile[flipedY]
 				planes := [2]uint8{uint8(rowdata), uint8(rowdata >> 8)}
@@ -166,7 +170,9 @@ func (b *bg) drawScanline(buf []iro.RGB555, y uint16, start, end int) {
 				ofs := b.palOfs + 16*palID
 				pal := b.r.pal.buf[ofs : ofs+16]
 
-				tile := tiledata[16*tileID : (16*tileID)+16] // 4bpp: 1タイル = 32バイト
+				tileStart := ((b.tileDataAddr / 2) + 16*uint(tileID)) & 0x7FFF
+				tile := vram[tileStart : tileStart+16] // 4bpp: 1タイル = 32バイト
+
 				flipedY := flip(8, vflip, int(y&0b111))
 				rowdata := [2]uint16{tile[flipedY], tile[flipedY+8]}
 				planes := [4]uint8{
@@ -186,10 +192,33 @@ func (b *bg) drawScanline(buf []iro.RGB555, y uint16, start, end int) {
 				}
 
 			case COLOR_7BPP:
-				crash("7bpp")
+				// crash("7bpp in Mode%d", b.r.mode)
 
 			case COLOR_8BPP:
-				crash("8bpp")
+				pal := b.r.pal.buf[0:256]
+
+				tileStart := ((b.tileDataAddr / 2) + 32*uint(tileID)) & 0x7FFF
+				tile := vram[tileStart : tileStart+32] // 8bpp: 1タイル = 64バイト
+
+				flipedY := flip(8, vflip, int(y&0b111))
+				rowdata := [4]uint16{tile[flipedY], tile[flipedY+8], tile[flipedY+16], tile[flipedY+24]}
+				planes := [8]uint8{
+					uint8(rowdata[0]), uint8(rowdata[0] >> 8),
+					uint8(rowdata[1]), uint8(rowdata[1] >> 8),
+					uint8(rowdata[2]), uint8(rowdata[2] >> 8),
+					uint8(rowdata[3]), uint8(rowdata[3] >> 8),
+				}
+
+				// 1pxずつ描画
+				for i := 0; i < 8; i++ {
+					colorID := uint8(0)
+					for j := 0; j < 8; j++ {
+						colorID += ((planes[j] >> (7 - i)) & 0b1) << j
+					}
+					if colorID != 0 {
+						buf[x+flip(8, hflip, i)] = pal[colorID]
+					}
+				}
 
 			default:
 				crash("Invalid color format: %d", b.color)
@@ -325,7 +354,7 @@ func (o *objl) drawObjScanline(i int, buf []iro.RGB555, y uint16, start, end int
 					colorID += ((planes[j] >> (7 - i)) & 0b1) << j
 				}
 				if colorID != 0 {
-					buf[int(obj.x)+flip(width, obj.hflip, x+i)] = pal[colorID]
+					buf[(int(obj.x)+flip(width, obj.hflip, x+i))%512] = pal[colorID]
 				}
 			}
 		}

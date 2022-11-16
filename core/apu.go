@@ -4,8 +4,9 @@ import (
 	a "github.com/pokemium/gsnes/core/apu"
 )
 
+// SNES Master cycles -> SPC700's CPU clock cycles
 func toApuCycles(masterCycles int64) float64 {
-	return float64(masterCycles*2) / 21
+	return float64(masterCycles) / 21
 }
 
 type apu struct {

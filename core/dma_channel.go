@@ -7,53 +7,58 @@ import (
 )
 
 type dmaChan struct {
-	c   *sfc
-	idx int // 0, 1, 2, .., 7
+	c      *sfc
+	idx    int // 0, 1, 2, .., 7
+	isHdma bool
+	event  scheduler.Event
 
 	param uint8 // DMAPx(0x43x0)
-	ram   uint8 // UNUSEDx(0x43xB)
-	event scheduler.Event
 	bus   struct {
-		a uint24 // A1Tx(0x43x2,0x43x3,0x43x4)
+		a uint24 // A1Tx(0x43x2,3,4)
 		b uint8  // BBADx(0x43x1)
 	}
-	remaining uint32 // DASx(GDMA) or 現在のHDMAテーブルエントリの残りユニット数(HDMA)
+	dasx uint24 // DASx(0x43x5,6,7)
 
 	// For HDMA
-	isHdma bool
-	table  struct {
-		addr uint24 // A2Ax
-		hdr  uint8  // NTRLx
-		wait int64  // 次のテーブルエントリまでの待機行数
-		bank uint8
+	doTransfer bool
+	a2ax       uint16 // A2Ax(0x43x8,9)
+	ntrlx      _ntrlx // NTRLx(0x43xA)
+
+	ram uint8 // UNUSEDx(0x43xB)
+}
+
+// NTRLx(0x43xA)
+type _ntrlx struct {
+	repeat bool
+	lines  uint8
+}
+
+func ntrlx(val uint8) _ntrlx {
+	return _ntrlx{
+		repeat: bit(val, 7),
+		lines:  val & 0x7F,
 	}
+}
+
+func (r _ntrlx) u8() uint8 {
+	val := r.lines & 0x7F
+	if r.repeat {
+		val |= 0x80
+	}
+	return val
 }
 
 func (d *dmaChan) reset() {
 	d.event = *scheduler.NewEvent(EVENT_DMA, d.runGDMA, EVENT_DMA_PRIO|uint(d.idx))
 	d.bus.a, d.bus.b = u24(0, 0), 0
-	d.remaining = 0
-}
-
-// Make a reservation to start DMA transfer.
-func (d *dmaChan) trigger(isHdma bool) {
-	d.isHdma = isHdma
-	if d.isHdma {
-		d.remaining = 0x0
-		d.table.addr, d.table.wait = d.bus.a, 0x0
-		return
-	}
-
-	if d.remaining == 0 {
-		d.remaining = 0x10000
-	}
-	d.c.s.ReSchedule(&d.event, FAST) // After $420b is written, the CPU gets one more CPU cycle before the pause
+	d.dasx = toU24(0)
 }
 
 func (d *dmaChan) runGDMA(cyclesLate int64) {
+	d.isHdma = false
+
 	c := d.c.dma
 	w := d.c.w
-	w.blocked = true
 
 	mode := d.param & 0b111
 	inc := gdmaIncrements[(d.param>>3)&0b11]
@@ -61,146 +66,177 @@ func (d *dmaChan) runGDMA(cyclesLate int64) {
 	switch mode {
 	// 1x1
 	case 0:
-		if d.remaining > 0 {
-			src, dst := d.srcdst(0)
-			val := w.load8(src, nil)
-			w.store8(dst, val, nil)
-			addCycle(w.cycles, MEDIUM)
-			d.bus.a = d.bus.a.plus(inc)
-			d.remaining--
-		}
+		src, dst := d.srcdst(0)
+		val := w.load8(src)
+		w.store8(dst, val, nil)
+		addCycle(w.cycles, MEDIUM)
+		d.bus.a = d.bus.a.plus(inc)
+		d.dasx.offset--
 
 	// 2x1
 	case 1:
 		for i := 0; i < 2; i++ {
-			if d.remaining > 0 {
-				src, dst := d.srcdst(i)
-				val := w.load8(src, nil)
-				w.store8(dst, val, nil)
-				addCycle(w.cycles, MEDIUM)
-				d.bus.a = d.bus.a.plus(inc)
-				d.remaining--
+			src, dst := d.srcdst(i)
+			val := w.load8(src)
+			w.store8(dst, val, nil)
+			addCycle(w.cycles, MEDIUM)
+			d.bus.a = d.bus.a.plus(inc)
+			d.dasx.offset--
+			if d.dasx.offset == 0 {
+				break
 			}
 		}
 
 	// 1x2
 	case 2, 6:
 		for i := 0; i < 2; i++ {
-			if d.remaining > 0 {
-				src, dst := d.srcdst(0)
-				val := w.load8(src, nil)
-				w.store8(dst, val, nil)
-				addCycle(w.cycles, MEDIUM)
-				d.bus.a = d.bus.a.plus(inc)
-				d.remaining--
+			src, dst := d.srcdst(0)
+			val := w.load8(src)
+			w.store8(dst, val, nil)
+			addCycle(w.cycles, MEDIUM)
+			d.bus.a = d.bus.a.plus(inc)
+			d.dasx.offset--
+			if d.dasx.offset == 0 {
+				break
 			}
 		}
 
 	// 2x2
 	case 3, 7:
-		crash("A -> B DMA Mode3 is not implemented")
+		for i := 0; i < 2; i++ {
+			for j := 0; j < 2; j++ {
+				src, dst := d.srcdst(i)
+				val := w.load8(src)
+				w.store8(dst, val, nil)
+				addCycle(w.cycles, MEDIUM)
+				d.bus.a = d.bus.a.plus(inc)
+				d.dasx.offset--
+				if d.dasx.offset == 0 {
+					break
+				}
+			}
+		}
 
-	// 1x4
+	// 4x1
 	case 4:
-		crash("A -> B DMA Mode4 is not implemented")
+		crash("GDMA Mode4 is not implemented")
 
 	case 5:
-		crash("A -> B DMA Mode5 is not implemented")
+		crash("GDMA Mode5 is not implemented")
 	}
 
-	if d.remaining > 0 {
+	if d.dasx.offset > 0 {
 		d.c.s.ReSchedule(&d.event, -cyclesLate)
 		return
 	}
 
 	// end
-	w.blocked = false
-	c.gdmaen = setBit(c.gdmaen, d.idx, false)
+	c.gdmaen = setBit(c.gdmaen, d.idx, false) // The MDMAEN bits are cleared automatically at transfer completion.
 	c.update()
 }
 
-func (d *dmaChan) runHDMA() {
-	c := d.c.dma
-	if d.table.wait > 0 {
-		d.table.wait--
-		return
-	}
+func (d *dmaChan) runHDMA() int64 {
+	d.isHdma = true
+	defer func() { d.isHdma = false }()
 
 	w := d.c.w
+	cycles := int64(8)
 
-	// Next table entry
-	if d.remaining == 0 {
-		d.table.hdr = w.load8(d.table.addr, nil)
-		d.table.addr.offset++
-
-		// end
-		if d.table.hdr == 0 {
-			w.blocked = false
-			c.hdmaen = setBit(c.hdmaen, d.idx, false)
-			return
-		}
-
-		if bit(d.table.hdr, 7) {
-			d.remaining = uint32(d.table.hdr & 0x7F)
-			d.table.wait = 0x0
-		} else {
-			d.remaining = 0x1
-			d.table.wait = int64(d.table.hdr&0x7F) - 1
-		}
+	if d.ntrlx.u8() == 0 {
+		return cycles
 	}
 
-	w.blocked = true
-
-	mode := d.param & 0b111
-	size := uint16(0)
-	switch mode {
-	// 1x1
-	case 0:
-		size = 1
-		src, dst := d.srcdst(0)
-		val := w.load8(src, nil)
-		w.store8(dst, val, nil)
-		addCycle(w.cycles, MEDIUM)
-
-	// 2x1
-	case 1:
-		size = 2
-		for i := 0; i < 2; i++ {
-			src, dst := d.srcdst(i)
-			val := w.load8(src, nil)
-			w.store8(dst, val, nil)
-			addCycle(w.cycles, MEDIUM)
-		}
-
-	// 1x2
-	case 2, 6:
-		size = 2
-		for i := 0; i < 2; i++ {
+	if d.doTransfer {
+		mode := d.param & 0b111
+		switch mode {
+		// 1x1
+		case 0:
 			src, dst := d.srcdst(0)
-			val := w.load8(src, nil)
+			val := w.load8(src)
 			w.store8(dst, val, nil)
-			addCycle(w.cycles, MEDIUM)
+			cycles += 8
+			d.incrementHDMAbus(1)
+
+		// 2x1
+		case 1:
+			for i := 0; i < 2; i++ {
+				src, dst := d.srcdst(i)
+				val := w.load8(src)
+				w.store8(dst, val, nil)
+				cycles += 8
+				d.incrementHDMAbus(1)
+			}
+
+		// 1x2
+		case 2, 6:
+			for i := 0; i < 2; i++ {
+				src, dst := d.srcdst(0)
+				val := w.load8(src)
+				w.store8(dst, val, nil)
+				cycles += 8
+				d.incrementHDMAbus(1)
+			}
+
+		// 2x2
+		case 3, 7:
+			for i := 0; i < 2; i++ {
+				for j := 0; j < 2; j++ {
+					src, dst := d.srcdst(i)
+					val := w.load8(src)
+					w.store8(dst, val, nil)
+					cycles += 8
+					d.incrementHDMAbus(1)
+				}
+			}
+
+		// 4x1
+		case 4:
+			for i := 0; i < 4; i++ {
+				src, dst := d.srcdst(i)
+				val := w.load8(src)
+				w.store8(dst, val, nil)
+				cycles += 8
+				d.incrementHDMAbus(1)
+			}
+
+		case 5:
+			crash("HDMA Mode5 is not implemented")
 		}
-
-	// 2x2
-	case 3, 7:
-		crash("HDMA Mode3 is not implemented")
-
-	// 1x4
-	case 4:
-		crash("HDMA Mode4 is not implemented")
-
-	case 5:
-		crash("HDMA Mode5 is not implemented")
 	}
-	d.remaining--
+
+	// decrement line counter
+	d.ntrlx.lines--
+	d.doTransfer = d.ntrlx.repeat
+	if d.ntrlx.lines == 0 {
+		d.loadHDMATable()
+	}
+
+	return cycles
+}
+
+func (d *dmaChan) loadHDMATable() int64 {
+	w := d.c.w
+	cycles := int64(8)
+
+	d.ntrlx = ntrlx(w.load8(u24(d.bus.a.bank, d.a2ax)))
+	d.a2ax++
 
 	if bit(d.param, 6) {
-		if d.remaining == 0 {
-			d.table.addr.offset++
-		}
+		// indirect
+		d.dasx.offset = w.load16(u24(d.bus.a.bank, d.a2ax), nil)
+		d.a2ax += 2
+		cycles += 16
+	}
+
+	d.doTransfer = true
+	return cycles
+}
+
+func (d *dmaChan) incrementHDMAbus(size int) {
+	if bit(d.param, 6) {
+		d.dasx = d.dasx.plus(size)
 	} else {
-		d.table.addr.offset += size
+		d.a2ax += uint16(size)
 	}
 }
 
@@ -209,11 +245,9 @@ func (d *dmaChan) srcdst(plus int) (src uint24, dst uint24) {
 	b := u24(0, 0x2100+uint16(d.bus.b)).plus(plus)
 
 	if d.isHdma {
-		a = d.table.addr
+		a = u24(d.bus.a.bank, d.a2ax)
 		if bit(d.param, 6) {
-			ofs := d.c.w.load16(a, nil)
-			progress := uint16(uint32(d.table.hdr&0x7F) - d.remaining)
-			a = u24(d.table.bank, ofs+progress)
+			a = d.dasx
 		}
 	}
 
@@ -231,14 +265,14 @@ func (d *dmaChan) String() string {
 	src, dst := d.srcdst(0)
 	mode := d.param & 0b111
 	pc := d.c.w.r.pc
-	s := fmt.Sprintf("DMA[%d] %v%s -> %v             C:%05x U:%02x in %v", d.idx, src, step, dst, d.remaining, mode, pc)
+	s := fmt.Sprintf("DMA[%d] %v%s -> %v             C:%05x U:%02x in %v", d.idx, src, step, dst, d.dasx, mode, pc)
 	switch dst.u32() {
 	case 0x2122, 0x213B:
 		pal := &d.c.ppu.pal
-		s = fmt.Sprintf("DMA[%d] %v%s -> %v(CGRAM:%04x) C:%05x U:%02x in %v", d.idx, src, step, dst, pal.idx*2, d.remaining, mode, pc)
+		s = fmt.Sprintf("DMA[%d] %v%s -> %v(CGRAM:%04x) C:%05x U:%02x in %v", d.idx, src, step, dst, pal.idx*2, d.dasx, mode, pc)
 	case 0x2118, 0x2139:
 		v := &d.c.ppu.vram
-		s = fmt.Sprintf("DMA[%d] %v%s -> %v(VRAM:%04x)  C:%05x U:%02x in %v", d.idx, src, step, dst, v.idx*2, d.remaining, mode, pc)
+		s = fmt.Sprintf("DMA[%d] %v%s -> %v(VRAM:%04x)  C:%05x U:%02x in %v", d.idx, src, step, dst, v.idx*2, d.dasx, mode, pc)
 	}
 	return s
 }

@@ -3,10 +3,16 @@ package core
 import "github.com/pokemium/iro"
 
 type palette struct {
-	buf         [256]iro.RGB555
+	buf         []iro.RGB555
 	idx         uint8
 	is2ndAccess bool
 	lastWritten uint8
+}
+
+func newPalette() *palette {
+	return &palette{
+		buf: make([]iro.RGB555, 256),
+	}
 }
 
 func (p *palette) setAddr(val uint8) {
