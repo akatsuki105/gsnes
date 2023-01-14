@@ -28,13 +28,7 @@ func (c *cartridge) loadROM(romData []uint8) {
 	switch c.h.T {
 	case cart.LoROM:
 		s.m.mmap(memblock("00-7D,80-FF:8000-FFFF", c.read, c.write).mask(0x3F_7FFF))
-
-		// System mirror
-		s.m.mmap(memblock("40-7D,C0-FF:0000-1FFF", s.w.wram.read, s.w.wram.write).mask(0x1FFF))    // WRAM(mirror)
-		s.m.mmap(memblock("40-7D,C0-FF:2100-213F", s.ppu.readIO, s.ppu.writeIO).mask(0x3F))        // PPU
-		s.m.mmap(memblock("40-7D,C0-FF:2140-217F", s.apu.readIO, s.apu.writeIO).mask(0x3))         // APU
-		s.m.mmap(memblock("40-7D,C0-FF:2180-2183,4016-4017,4200-421F", s.w.readCPU, s.w.writeCPU)) // CPU
-		s.m.mmap(memblock("40-7D,C0-FF:4300-437F", s.dma.readIO, s.dma.writeIO).mask(0x7F))        // DMA
+		s.m.mmap(memblock("40-7D,C0-FF:0000-7FFF", c.read, c.write).mask(0x3F_7FFF))
 		if cart.HaveSRAM(&c.h) {
 			s.m.mmap(memblock("70-7D,F0-FF:0000-7FFF", c.readSRAM, c.writeSRAM).mask(0x7FFF)) // SRAM
 		}
@@ -43,7 +37,7 @@ func (c *cartridge) loadROM(romData []uint8) {
 		s.m.mmap(memblock("40-7D,C0-FF:0000-FFFF", c.read, c.write).mask(0x3F_FFFF))
 		s.m.mmap(memblock("00-3F,80-BF:8000-FFFF", c.read, c.write).mask(0x3F_FFFF))
 		if cart.HaveSRAM(&c.h) {
-			s.m.mmap(memblock("30-3F,B0-BF:6000-7FFF", c.readSRAM, c.writeSRAM).mask(0x1FFF))
+			s.m.mmap(memblock("00-3F,80-BF:6000-7FFF", c.readSRAM, c.writeSRAM).mask(0x1FFF))
 		}
 
 	case cart.ExHiROM:
