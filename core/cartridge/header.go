@@ -65,6 +65,10 @@ func detectROMType(romData []uint8) RomType {
 	// TODO
 	case len(romData) == 1572864:
 		return LoROM
+
+	// TODO: For test ROM
+	case len(romData) <= 65536:
+		return LoROM
 	}
 
 	return Unknown
