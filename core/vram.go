@@ -49,7 +49,7 @@ func (v *vram) read(hi bool) uint8 {
 }
 
 func (v *vram) write(hi bool, val uint8) {
-	idx := ror(v.idx, v.rotate) & 0x7FFF
+	idx := rol(v.idx, v.rotate) & 0x7FFF
 	old := v.buf[idx]
 	if hi {
 		v.buf[idx] = (uint16(val) << 8) | (old & 0xFF)
@@ -66,12 +66,12 @@ func (v *vram) write(hi bool, val uint8) {
 }
 
 func (v *vram) prefetch() {
-	idx := ror(v.idx, v.rotate) & 0x7FFF
+	idx := rol(v.idx, v.rotate) & 0x7FFF
 	v.prefetched = v.buf[idx]
 }
 
-// address rotation
-func ror(val uint16, rotate uint16) uint16 {
+// address left rotation
+func rol(val uint16, rotate uint16) uint16 {
 	switch rotate {
 	case 8:
 		a := val & 0b1111_1111_0000_0000
