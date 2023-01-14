@@ -59,6 +59,6 @@ func (w *wram) writeIO(addr uint, val uint8) {
 	case 3: // WMADDH
 		val &= 0b1
 		w.addr &= 0x0_FFFF
-		w.addr |= uint32(val) << 16
+		w.addr |= (uint32(val) << 16)
 	}
 }
