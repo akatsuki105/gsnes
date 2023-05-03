@@ -61,6 +61,7 @@ func (w *w65816) zeropageX(fn func(addr uint24)) {
 		if (w.r.d & 0xFF) != 0 {
 			addCycle(w.cycles, FAST) // IO
 		}
+		addCycle(w.cycles, FAST)
 
 		addr := u24(0, w.r.d).plus(int(nn)).plus(int(w.r.x)) // 00:(nn+D+X)
 		fn(addr)
@@ -214,6 +215,7 @@ func (w *w65816) indirectX(fn func(addr uint24)) {
 		if (w.r.d & 0xFF) != 0 {
 			addCycle(w.cycles, FAST) // IO(2a)
 		}
+		addCycle(w.cycles, FAST)
 
 		// AAL, AAH
 		addr := u24(0, w.r.d+uint16(nn)).plus(int(w.r.x))
