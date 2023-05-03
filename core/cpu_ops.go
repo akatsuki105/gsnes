@@ -592,6 +592,7 @@ func (w *w65816) ROL(addr uint24) {
 
 	if w.r.emulation || w.r.p.m {
 		w.read8(addr, func(val uint8) {
+			addCycle(w.cycles, FAST)
 			w.r.p.c = bit(val, 7)
 			val <<= 1
 			val = setBit(val, 0, c)
@@ -602,6 +603,7 @@ func (w *w65816) ROL(addr uint24) {
 	}
 
 	w.read16(addr, func(val uint16) {
+		addCycle(w.cycles, FAST)
 		w.r.p.c = bit(val, 15)
 		val <<= 1
 		val = setBit(val, 0, c)
