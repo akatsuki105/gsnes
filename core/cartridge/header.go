@@ -107,6 +107,9 @@ func isValidRomHeader(romData []uint8, t RomType) bool {
 	}
 
 	size := int(hdr[0x17])
+	if size == 8 && romSize == (1024*1024) {
+		return true
+	}
 	return (size << 15) == romSize
 }
 
