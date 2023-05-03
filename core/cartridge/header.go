@@ -102,7 +102,12 @@ func isValidRomHeader(romData []uint8, t RomType) bool {
 		}
 	}
 
-	return expected == checksum
+	if expected == checksum {
+		return true
+	}
+
+	size := int(hdr[0x17])
+	return (size << 15) == romSize
 }
 
 func (h *Header) load(romData []uint8) {
