@@ -1335,6 +1335,7 @@ func opD6(w *w65816) {
 	w.zeropageX(func(addr uint24) {
 		if w.r.emulation || w.r.p.m {
 			w.read8(addr, func(val uint8) {
+				addCycle(w.cycles, FAST)
 				val -= 1
 				w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
 			})
@@ -1343,6 +1344,7 @@ func opD6(w *w65816) {
 
 		// 3,3a
 		w.read16(addr, func(val uint16) {
+			addCycle(w.cycles, FAST)
 			val -= 1
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 16)) })
 		})
@@ -1592,6 +1594,7 @@ func opF6(w *w65816) {
 	w.zeropageX(func(addr uint24) {
 		if w.r.emulation || w.r.p.m {
 			w.read8(addr, func(val uint8) {
+				addCycle(w.cycles, FAST)
 				val++
 				w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
 			})
@@ -1600,6 +1603,7 @@ func opF6(w *w65816) {
 
 		// 3,3a
 		w.read16(addr, func(val uint16) {
+			addCycle(w.cycles, FAST)
 			val += 1
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
 		})

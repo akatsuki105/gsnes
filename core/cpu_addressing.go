@@ -79,6 +79,7 @@ func (w *w65816) zeropageY(fn func(addr uint24)) {
 		if (w.r.d & 0xFF) != 0 {
 			addCycle(w.cycles, FAST) // IO
 		}
+		addCycle(w.cycles, FAST)
 
 		addr := u24(0, w.r.d).plus(int(nn)).plus(int(w.r.y)) // 00:(nn+D+Y)
 		fn(addr)
