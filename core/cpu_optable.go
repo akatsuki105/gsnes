@@ -1399,10 +1399,9 @@ func opDD(w *w65816) {
 //	Nocash: `DEC [nnnn+X]`
 func opDE(w *w65816) {
 	w.absoluteX(func(addr uint24) {
-		addCycle(w.cycles, FAST)
-
 		if w.r.emulation || w.r.p.m {
 			w.read8(addr, func(val uint8) {
+				addCycle(w.cycles, FAST)
 				val -= 1
 				w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
 			})
@@ -1410,6 +1409,7 @@ func opDE(w *w65816) {
 		}
 
 		w.read16(addr, func(val uint16) {
+			addCycle(w.cycles, FAST)
 			val -= 1
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
 		})
@@ -1659,10 +1659,9 @@ func opFD(w *w65816) {
 //	Nocash: `INC [nnnn+X]`
 func opFE(w *w65816) {
 	w.absoluteX(func(addr uint24) {
-		addCycle(w.cycles, FAST)
-
 		if w.r.emulation || w.r.p.m {
 			w.read8(addr, func(val uint8) {
+				addCycle(w.cycles, FAST)
 				val++
 				w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
 			})
@@ -1670,6 +1669,7 @@ func opFE(w *w65816) {
 		}
 
 		w.read16(addr, func(val uint16) {
+			addCycle(w.cycles, FAST)
 			val++
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
 		})
