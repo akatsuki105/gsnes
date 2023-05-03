@@ -176,7 +176,7 @@ func op1D(w *w65816) {
 }
 
 func op1E(w *w65816) {
-	w.absoluteX(w.ASL, W)
+	w.absoluteX(w.ASL, M)
 }
 
 func op1F(w *w65816) {
@@ -380,7 +380,7 @@ func op3D(w *w65816) {
 }
 
 func op3E(w *w65816) {
-	w.absoluteX(w.ROL, W)
+	w.absoluteX(w.ROL, M)
 }
 
 func op3F(w *w65816) {
@@ -614,7 +614,7 @@ func op5D(w *w65816) {
 }
 
 func op5E(w *w65816) {
-	w.absoluteX(w.LSR, W)
+	w.absoluteX(w.LSR, M)
 }
 
 func op5F(w *w65816) {
@@ -819,7 +819,7 @@ func op7D(w *w65816) {
 }
 
 func op7E(w *w65816) {
-	w.absoluteX(w.ROR, W)
+	w.absoluteX(w.ROR, M)
 }
 
 func op7F(w *w65816) {
@@ -1411,7 +1411,7 @@ func opDE(w *w65816) {
 			val -= 1
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
 		})
-	}, W)
+	}, M)
 }
 
 func opDF(w *w65816) {
@@ -1669,7 +1669,7 @@ func opFE(w *w65816) {
 			val++
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
 		})
-	}, W)
+	}, M)
 }
 
 func opFF(w *w65816) {

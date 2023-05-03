@@ -116,7 +116,7 @@ func (w *w65816) absoluteX(fn func(addr uint24), rw access) {
 				addCycle(w.cycles, FAST) // 3a
 			}
 		}
-		if rw == W {
+		if rw == W || rw == M {
 			addCycle(w.cycles, FAST) // 3a
 		}
 
