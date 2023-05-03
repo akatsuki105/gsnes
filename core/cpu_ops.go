@@ -562,6 +562,7 @@ func (w *w65816) ROR(addr uint24) {
 
 	if w.r.emulation || w.r.p.m {
 		w.read8(addr, func(val uint8) {
+			addCycle(w.cycles, FAST)
 			u16 := uint16(val) | (uint16(c) << 8)
 			c := u16&0b1 != 0
 			u16 >>= 1
@@ -575,6 +576,7 @@ func (w *w65816) ROR(addr uint24) {
 	}
 
 	w.read16(addr, func(val uint16) {
+		addCycle(w.cycles, FAST)
 		u32 := uint32(val) | (uint32(c) << 16)
 		c := u32&0b1 != 0
 		u32 >>= 1
@@ -615,6 +617,7 @@ func (w *w65816) ROL(addr uint24) {
 func (w *w65816) LSR(addr uint24) {
 	if w.r.emulation || w.r.p.m {
 		w.read8(addr, func(val uint8) {
+			addCycle(w.cycles, FAST)
 			w.r.p.c = bit(val, 0)
 			val >>= 1
 			w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
@@ -623,6 +626,7 @@ func (w *w65816) LSR(addr uint24) {
 	}
 
 	w.read16(addr, func(val uint16) {
+		addCycle(w.cycles, FAST)
 		w.r.p.c = bit(val, 0)
 		val >>= 1
 		w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
@@ -647,6 +651,7 @@ func (w *w65816) LSR16(r *uint16) {
 func (w *w65816) ASL(addr uint24) {
 	if w.r.emulation || w.r.p.m {
 		w.read8(addr, func(val uint8) {
+			addCycle(w.cycles, FAST)
 			w.r.p.c = bit(val, 7)
 			val <<= 1
 			w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
@@ -655,6 +660,7 @@ func (w *w65816) ASL(addr uint24) {
 	}
 
 	w.read16(addr, func(val uint16) {
+		addCycle(w.cycles, FAST)
 		w.r.p.c = bit(val, 15)
 		val <<= 1
 		w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })

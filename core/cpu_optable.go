@@ -1399,6 +1399,8 @@ func opDD(w *w65816) {
 //	Nocash: `DEC [nnnn+X]`
 func opDE(w *w65816) {
 	w.absoluteX(func(addr uint24) {
+		addCycle(w.cycles, FAST)
+
 		if w.r.emulation || w.r.p.m {
 			w.read8(addr, func(val uint8) {
 				val -= 1
@@ -1657,6 +1659,8 @@ func opFD(w *w65816) {
 //	Nocash: `INC [nnnn+X]`
 func opFE(w *w65816) {
 	w.absoluteX(func(addr uint24) {
+		addCycle(w.cycles, FAST)
+
 		if w.r.emulation || w.r.p.m {
 			w.read8(addr, func(val uint8) {
 				val++
