@@ -497,6 +497,7 @@ func (w *w65816) SBC(addr uint24) {
 func (w *w65816) TSB(addr uint24) {
 	if w.r.emulation || w.r.p.m {
 		w.read8(addr, func(val uint8) {
+			addCycle(w.cycles, FAST)
 			w.r.p.setFlags(flag{'z', uint8(w.r.a)&val == 0})
 			val |= uint8(w.r.a)
 			w.write8(addr, val, nil)
@@ -505,6 +506,7 @@ func (w *w65816) TSB(addr uint24) {
 	}
 
 	w.read16(addr, func(val uint16) {
+		addCycle(w.cycles, FAST)
 		w.r.p.setFlags(flag{'z', w.r.a&val == 0})
 		val |= w.r.a
 		w.write16(addr, val, nil)
@@ -514,6 +516,7 @@ func (w *w65816) TSB(addr uint24) {
 func (w *w65816) TRB(addr uint24) {
 	if w.r.emulation || w.r.p.m {
 		w.read8(addr, func(val uint8) {
+			addCycle(w.cycles, FAST)
 			w.r.p.setFlags(flag{'z', uint8(w.r.a)&val == 0})
 			val &= ^uint8(w.r.a)
 			w.write8(addr, val, nil)
@@ -522,6 +525,7 @@ func (w *w65816) TRB(addr uint24) {
 	}
 
 	w.read16(addr, func(val uint16) {
+		addCycle(w.cycles, FAST)
 		w.r.p.setFlags(flag{'z', w.r.a&val == 0})
 		val &= ^w.r.a
 		w.write16(addr, val, nil)

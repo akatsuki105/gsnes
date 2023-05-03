@@ -145,7 +145,7 @@ func op18(w *w65816) {
 }
 
 func op19(w *w65816) {
-	w.absoluteY(w.ORA)
+	w.absoluteY(w.ORA, R)
 }
 
 // 0x1A:
@@ -352,7 +352,7 @@ func op38(w *w65816) {
 }
 
 func op39(w *w65816) {
-	w.absoluteY(w.AND)
+	w.absoluteY(w.AND, R)
 }
 
 // DEA, `DEC A`
@@ -593,7 +593,7 @@ func op58(w *w65816) {
 }
 
 func op59(w *w65816) {
-	w.absoluteY(w.EOR)
+	w.absoluteY(w.EOR, R)
 }
 
 func op5A(w *w65816) {
@@ -790,7 +790,7 @@ func op78(w *w65816) {
 }
 
 func op79(w *w65816) {
-	w.absoluteY(w.ADC)
+	w.absoluteY(w.ADC, R)
 }
 
 func op7A(w *w65816) {
@@ -961,7 +961,7 @@ func op98(w *w65816) {
 }
 
 func op99(w *w65816) {
-	w.absoluteY(w.STN(&w.r.a))
+	w.absoluteY(w.STN(&w.r.a), W)
 }
 
 func op9A(w *w65816) {
@@ -1114,7 +1114,7 @@ func opB8(w *w65816) {
 }
 
 func opB9(w *w65816) {
-	w.absoluteY(w.LDNm(&w.r.a))
+	w.absoluteY(w.LDNm(&w.r.a), R)
 }
 
 func opBA(w *w65816) {
@@ -1135,7 +1135,7 @@ func opBD(w *w65816) {
 
 // LDX nnnn,Y (`MOV X,[nnnn+Y]`)
 func opBE(w *w65816) {
-	w.absoluteY(w.LDNm(&w.r.x))
+	w.absoluteY(w.LDNm(&w.r.x), R)
 }
 
 func opBF(w *w65816) {
@@ -1271,6 +1271,7 @@ func opCE(w *w65816) {
 	w.absolute(func(addr uint24) {
 		if w.r.emulation || w.r.p.m {
 			w.read8(addr, func(val uint8) {
+				addCycle(w.cycles, FAST)
 				val -= 1
 				w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
 			})
@@ -1278,6 +1279,7 @@ func opCE(w *w65816) {
 		}
 
 		w.read16(addr, func(val uint16) {
+			addCycle(w.cycles, FAST)
 			val -= 1
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
 		})
@@ -1354,7 +1356,7 @@ func opD8(w *w65816) {
 }
 
 func opD9(w *w65816) {
-	w.absoluteY(w.CMP(&w.r.a))
+	w.absoluteY(w.CMP(&w.r.a), R)
 }
 
 // PHX, `PUSH X`
@@ -1531,6 +1533,7 @@ func opEE(w *w65816) {
 	w.absolute(func(addr uint24) {
 		if w.r.emulation || w.r.p.m {
 			w.read8(addr, func(val uint8) {
+				addCycle(w.cycles, FAST)
 				val++
 				w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
 			})
@@ -1538,6 +1541,7 @@ func opEE(w *w65816) {
 		}
 
 		w.read16(addr, func(val uint16) {
+			addCycle(w.cycles, FAST)
 			val++
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
 		})
@@ -1609,7 +1613,7 @@ func opF8(w *w65816) {
 }
 
 func opF9(w *w65816) {
-	w.absoluteY(w.SBC)
+	w.absoluteY(w.SBC, R)
 }
 
 func opFA(w *w65816) {

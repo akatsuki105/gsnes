@@ -130,10 +130,15 @@ func (w *w65816) absoluteX(fn func(addr uint24), rw access) {
 //	Nocash:  `[nnnn+Y]`
 //	Alias:   `a,y`
 //	Example:  0xB9
-func (w *w65816) absoluteY(fn func(addr uint24)) {
+func (w *w65816) absoluteY(fn func(addr uint24), rw access) {
 	w.imm16(func(nnnn uint16) {
 		// penalty cycle when crossing 8-bit page boundaries:
-		if nnnn>>8 != (nnnn+w.r.y)>>8 {
+		if rw == R {
+			if !w.r.p.x || (nnnn>>8 != (nnnn+w.r.x)>>8) {
+				addCycle(w.cycles, FAST) // 3a
+			}
+		}
+		if rw == W || rw == M {
 			addCycle(w.cycles, FAST) // 3a
 		}
 
