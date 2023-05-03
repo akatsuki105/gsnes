@@ -116,6 +116,9 @@ func (w *w65816) absoluteX(fn func(addr uint24), rw access) {
 				addCycle(w.cycles, FAST) // 3a
 			}
 		}
+		if rw == W {
+			addCycle(w.cycles, FAST) // 3a
+		}
 
 		addr := u24(w.r.db, nnnn).plus(int(w.r.x)) // DB:(nnnn+X)
 		fn(addr)
