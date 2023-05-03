@@ -68,7 +68,7 @@ func (d *dmaChan) runGDMA(cyclesLate int64) {
 	case 0:
 		src, dst := d.srcdst(0)
 		val := w.load8(src)
-		w.store8(dst, val, nil)
+		w.store8(dst, val)
 		addCycle(w.cycles, MEDIUM)
 		d.bus.a = d.bus.a.plus(inc)
 		d.dasx.offset--
@@ -78,7 +78,7 @@ func (d *dmaChan) runGDMA(cyclesLate int64) {
 		for i := 0; i < 2; i++ {
 			src, dst := d.srcdst(i)
 			val := w.load8(src)
-			w.store8(dst, val, nil)
+			w.store8(dst, val)
 			addCycle(w.cycles, MEDIUM)
 			d.bus.a = d.bus.a.plus(inc)
 			d.dasx.offset--
@@ -92,7 +92,7 @@ func (d *dmaChan) runGDMA(cyclesLate int64) {
 		for i := 0; i < 2; i++ {
 			src, dst := d.srcdst(0)
 			val := w.load8(src)
-			w.store8(dst, val, nil)
+			w.store8(dst, val)
 			addCycle(w.cycles, MEDIUM)
 			d.bus.a = d.bus.a.plus(inc)
 			d.dasx.offset--
@@ -103,16 +103,17 @@ func (d *dmaChan) runGDMA(cyclesLate int64) {
 
 	// 2x2
 	case 3, 7:
+	GDMA2x2:
 		for i := 0; i < 2; i++ {
 			for j := 0; j < 2; j++ {
 				src, dst := d.srcdst(i)
 				val := w.load8(src)
-				w.store8(dst, val, nil)
+				w.store8(dst, val)
 				addCycle(w.cycles, MEDIUM)
 				d.bus.a = d.bus.a.plus(inc)
 				d.dasx.offset--
 				if d.dasx.offset == 0 {
-					break
+					break GDMA2x2
 				}
 			}
 		}
@@ -153,7 +154,7 @@ func (d *dmaChan) runHDMA() int64 {
 		case 0:
 			src, dst := d.srcdst(0)
 			val := w.load8(src)
-			w.store8(dst, val, nil)
+			w.store8(dst, val)
 			cycles += 8
 			d.incrementHDMAbus(1)
 
@@ -162,7 +163,7 @@ func (d *dmaChan) runHDMA() int64 {
 			for i := 0; i < 2; i++ {
 				src, dst := d.srcdst(i)
 				val := w.load8(src)
-				w.store8(dst, val, nil)
+				w.store8(dst, val)
 				cycles += 8
 				d.incrementHDMAbus(1)
 			}
@@ -172,7 +173,7 @@ func (d *dmaChan) runHDMA() int64 {
 			for i := 0; i < 2; i++ {
 				src, dst := d.srcdst(0)
 				val := w.load8(src)
-				w.store8(dst, val, nil)
+				w.store8(dst, val)
 				cycles += 8
 				d.incrementHDMAbus(1)
 			}
@@ -183,7 +184,7 @@ func (d *dmaChan) runHDMA() int64 {
 				for j := 0; j < 2; j++ {
 					src, dst := d.srcdst(i)
 					val := w.load8(src)
-					w.store8(dst, val, nil)
+					w.store8(dst, val)
 					cycles += 8
 					d.incrementHDMAbus(1)
 				}
@@ -194,7 +195,7 @@ func (d *dmaChan) runHDMA() int64 {
 			for i := 0; i < 4; i++ {
 				src, dst := d.srcdst(i)
 				val := w.load8(src)
-				w.store8(dst, val, nil)
+				w.store8(dst, val)
 				cycles += 8
 				d.incrementHDMAbus(1)
 			}

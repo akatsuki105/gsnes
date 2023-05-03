@@ -118,7 +118,7 @@ func (w *w65816) step() (running bool) {
 
 	case CPU_MEMORY_STORE:
 		addCycle(w.cycles, w.wait(w.bus.addr))
-		w.store8(w.bus.addr, w.bus.data, w.cycles)
+		w.store8(w.bus.addr, w.bus.data)
 	}
 
 	w.state = CPU_FETCH
@@ -214,7 +214,7 @@ func (w *w65816) load16(addr uint24, cycles *int64) uint16 {
 	return (hi << 8) | lo
 }
 
-func (w *w65816) store8(addr uint24, val uint8, cycles *int64) {
+func (w *w65816) store8(addr uint24, val uint8) {
 	m := w.c.m
 	m.before = uint(addr.u32())
 	m.writer[m.lookup[addr.u32()]](m.target[addr.u32()], val)
