@@ -55,12 +55,15 @@ func op07(w *w65816) {
 
 // PHP, `PUSH P`
 func op08(w *w65816) {
-	p := w.r.p
-	if w.r.emulation {
-		p.x = true
-		p.m = true
+	w.state = CPU_DUMMY_READ
+	w.inst = func(w *w65816) {
+		p := w.r.p
+		if w.r.emulation {
+			p.x = true
+			p.m = true
+		}
+		w.PUSH8(p.pack(), func(w *w65816) {})
 	}
-	w.PUSH8(p.pack(), func(w *w65816) {})
 }
 
 func op09(w *w65816) {
@@ -508,8 +511,12 @@ func op4A(w *w65816) {
 	}
 }
 
+// PHK, PUSH PB
 func op4B(w *w65816) {
-	w.PUSH8(w.r.pc.bank, func(w *w65816) {})
+	w.state = CPU_DUMMY_READ
+	w.inst = func(w *w65816) {
+		w.PUSH8(w.r.pc.bank, func(w *w65816) {})
+	}
 }
 
 // JMP nnnn (PC=nnnn)
@@ -907,8 +914,12 @@ func op8A(w *w65816) {
 	w.MOV(&w.r.a, &w.r.x)
 }
 
+// PHB, PUSH DB
 func op8B(w *w65816) {
-	w.PUSH8(w.r.db, func(w *w65816) {})
+	w.state = CPU_DUMMY_READ
+	w.inst = func(w *w65816) {
+		w.PUSH8(w.r.db, func(w *w65816) {})
+	}
 }
 
 func op8C(w *w65816) {
@@ -1370,11 +1381,14 @@ func opD9(w *w65816) {
 
 // PHX, `PUSH X`
 func opDA(w *w65816) {
-	if w.r.emulation || w.r.p.x {
-		w.PUSH8(uint8(w.r.x), func(w *w65816) {})
-		return
+	w.state = CPU_DUMMY_READ
+	w.inst = func(w *w65816) {
+		if w.r.emulation || w.r.p.x {
+			w.PUSH8(uint8(w.r.x), func(w *w65816) {})
+			return
+		}
+		w.PUSH16(w.r.x, func(w *w65816) {})
 	}
-	w.PUSH16(w.r.x, func(w *w65816) {})
 }
 
 // STP
