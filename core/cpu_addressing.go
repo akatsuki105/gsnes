@@ -303,6 +303,7 @@ func (w *w65816) indirectLongY(fn func(addr uint24)) {
 //	Example:  0x23
 func (w *w65816) stackRelative(fn func(addr uint24)) {
 	w.imm8(func(nn uint8) {
+		addCycle(w.cycles, FAST)
 		fn(u24(0, uint16(nn)).plus(int(w.r.s)))
 	})
 }
@@ -315,8 +316,10 @@ func (w *w65816) stackRelative(fn func(addr uint24)) {
 //	Example:  0x33
 func (w *w65816) stackRelativeY(fn func(addr uint24)) {
 	w.imm8(func(nn uint8) {
+		addCycle(w.cycles, FAST)
 		addr := u24(0, uint16(nn)).plus(int(w.r.s))
 		w.read16(addr, func(ofs uint16) {
+			addCycle(w.cycles, FAST)
 			fn(u24(w.r.db, ofs).plus(int(w.r.y)))
 		})
 	})
