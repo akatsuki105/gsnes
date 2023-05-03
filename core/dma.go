@@ -43,11 +43,8 @@ func (c *dmaController) initGDMA() {
 	w.lock = setBit(w.lock, BLOCK_DMA, true) // CPU block
 
 	// wait for 8x cycles
-	delay := int64(8-c.start%8) & 0b111
-	addCycle(w.cycles, delay)
-
+	addCycle(w.cycles, int64(8-c.start&0b111))
 	addCycle(w.cycles, 8) // DMA initialization
-
 	c.update()
 }
 

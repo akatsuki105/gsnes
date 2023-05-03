@@ -197,6 +197,7 @@ func (s *sfc) run() {
 			}
 			if s.dma.pending {
 				s.dma.initGDMA()
+				s.processEvents()
 			}
 		}
 
