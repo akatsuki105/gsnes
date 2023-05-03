@@ -275,6 +275,8 @@ func op29(w *w65816) {
 
 // ROL A
 func op2A(w *w65816) {
+	addCycle(w.cycles, FAST)
+
 	c := w.r.p.c
 
 	if w.r.emulation || w.r.p.m {
@@ -690,6 +692,8 @@ func op69(w *w65816) {
 
 // ROR A
 func op6A(w *w65816) {
+	addCycle(w.cycles, FAST)
+
 	c := w.r.p.c
 
 	if w.r.emulation || w.r.p.m {
