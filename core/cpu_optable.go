@@ -1205,8 +1205,11 @@ func opC6(w *w65816) {
 		// 3,3a
 		w.read16(addr, func(val uint16) {
 			val--
-			// 5a, 5
-			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
+			w.state = CPU_DUMMY_READ
+			w.inst = func(w *w65816) {
+				// 5a, 5
+				w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
+			}
 		})
 	})
 }
@@ -1471,7 +1474,10 @@ func opE6(w *w65816) {
 		if w.r.emulation || w.r.p.m {
 			w.read8(addr, func(val uint8) {
 				val++
-				w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
+				w.state = CPU_DUMMY_READ
+				w.inst = func(w *w65816) {
+					w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
+				}
 			})
 
 			return
@@ -1479,8 +1485,11 @@ func opE6(w *w65816) {
 
 		// 3,3a
 		w.read16(addr, func(val uint16) {
-			val += 1
-			w.write16(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 16)) })
+			val++
+			w.state = CPU_DUMMY_READ
+			w.inst = func(w *w65816) {
+				w.write16(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 16)) })
+			}
 		})
 	})
 }
