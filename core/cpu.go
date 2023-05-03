@@ -113,7 +113,7 @@ func (w *w65816) step() (running bool) {
 		addCycle(w.cycles, FAST)
 
 	case CPU_MEMORY_LOAD:
-		addCycle(w.cycles, w.wait(w.r.pc))
+		addCycle(w.cycles, w.wait(w.bus.addr))
 		w.bus.data = w.load8(w.bus.addr)
 
 	case CPU_MEMORY_STORE:

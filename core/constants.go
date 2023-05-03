@@ -21,6 +21,14 @@ const (
 	RESET
 )
 
+type access int
+
+const (
+	R access = iota // Read
+	W               // Write
+	M               // Modify
+)
+
 const (
 	MAX_ROM_SIZE = 8 * MB
 	WRAM_SIZE    = 128 * KB

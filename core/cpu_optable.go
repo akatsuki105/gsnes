@@ -172,11 +172,11 @@ func op1C(w *w65816) {
 }
 
 func op1D(w *w65816) {
-	w.absoluteX(w.ORA)
+	w.absoluteX(w.ORA, R)
 }
 
 func op1E(w *w65816) {
-	w.absoluteX(w.ASL)
+	w.absoluteX(w.ASL, W)
 }
 
 func op1F(w *w65816) {
@@ -372,15 +372,15 @@ func op3B(w *w65816) {
 }
 
 func op3C(w *w65816) {
-	w.absoluteX(w.BIT)
+	w.absoluteX(w.BIT, R)
 }
 
 func op3D(w *w65816) {
-	w.absoluteX(w.AND)
+	w.absoluteX(w.AND, R)
 }
 
 func op3E(w *w65816) {
-	w.absoluteX(w.ROL)
+	w.absoluteX(w.ROL, W)
 }
 
 func op3F(w *w65816) {
@@ -610,11 +610,11 @@ func op5C(w *w65816) {
 }
 
 func op5D(w *w65816) {
-	w.absoluteX(w.EOR)
+	w.absoluteX(w.EOR, R)
 }
 
 func op5E(w *w65816) {
-	w.absoluteX(w.LSR)
+	w.absoluteX(w.LSR, W)
 }
 
 func op5F(w *w65816) {
@@ -815,11 +815,11 @@ func op7C(w *w65816) {
 }
 
 func op7D(w *w65816) {
-	w.absoluteX(w.ADC)
+	w.absoluteX(w.ADC, R)
 }
 
 func op7E(w *w65816) {
-	w.absoluteX(w.ROR)
+	w.absoluteX(w.ROR, W)
 }
 
 func op7F(w *w65816) {
@@ -977,11 +977,11 @@ func op9C(w *w65816) {
 }
 
 func op9D(w *w65816) {
-	w.absoluteX(w.STN(&w.r.a))
+	w.absoluteX(w.STN(&w.r.a), W)
 }
 
 func op9E(w *w65816) {
-	w.absoluteX(w.STN(nil))
+	w.absoluteX(w.STN(nil), W)
 }
 
 func op9F(w *w65816) {
@@ -1126,11 +1126,11 @@ func opBB(w *w65816) {
 }
 
 func opBC(w *w65816) {
-	w.absoluteX(w.LDNm(&w.r.y))
+	w.absoluteX(w.LDNm(&w.r.y), R)
 }
 
 func opBD(w *w65816) {
-	w.absoluteX(w.LDNm(&w.r.a))
+	w.absoluteX(w.LDNm(&w.r.a), R)
 }
 
 // LDX nnnn,Y (`MOV X,[nnnn+Y]`)
@@ -1389,7 +1389,7 @@ func opDC(w *w65816) {
 }
 
 func opDD(w *w65816) {
-	w.absoluteX(w.CMP(&w.r.a))
+	w.absoluteX(w.CMP(&w.r.a), R)
 }
 
 // 0xDE:
@@ -1411,7 +1411,7 @@ func opDE(w *w65816) {
 			val -= 1
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
 		})
-	})
+	}, W)
 }
 
 func opDF(w *w65816) {
@@ -1647,7 +1647,7 @@ func opFC(w *w65816) {
 }
 
 func opFD(w *w65816) {
-	w.absoluteX(w.SBC)
+	w.absoluteX(w.SBC, R)
 }
 
 // 0xFE:
@@ -1669,7 +1669,7 @@ func opFE(w *w65816) {
 			val++
 			w.write16(addr, val, func() { w.r.p.setFlags(zn(val, 16)) })
 		})
-	})
+	}, W)
 }
 
 func opFF(w *w65816) {

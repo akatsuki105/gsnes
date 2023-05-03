@@ -107,12 +107,14 @@ func (w *w65816) absolute(fn func(addr uint24)) {
 //	Nocash:  `[nnnn+X]`
 //	Alias:   `a,x`
 //	Example:  0x1D
-func (w *w65816) absoluteX(fn func(addr uint24)) {
+func (w *w65816) absoluteX(fn func(addr uint24), rw access) {
 	// AAL, AAH
 	w.imm16(func(nnnn uint16) {
 		// penalty cycle when crossing 8-bit page boundaries:
-		if nnnn>>8 != (nnnn+w.r.x)>>8 {
-			addCycle(w.cycles, FAST) // 3a
+		if rw == R {
+			if !w.r.p.x || (nnnn>>8 != (nnnn+w.r.x)>>8) {
+				addCycle(w.cycles, FAST) // 3a
+			}
 		}
 
 		addr := u24(w.r.db, nnnn).plus(int(w.r.x)) // DB:(nnnn+X)
