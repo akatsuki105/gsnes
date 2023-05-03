@@ -595,7 +595,7 @@ func (w *w65816) ROL(addr uint24) {
 			w.r.p.c = bit(val, 7)
 			val <<= 1
 			val = setBit(val, 0, c)
-			w.write16(addr, uint16(val), func() { w.r.p.setFlags(zn(uint16(val), 8)) })
+			w.write8(addr, val, func() { w.r.p.setFlags(zn(uint16(val), 8)) })
 		})
 
 		return
