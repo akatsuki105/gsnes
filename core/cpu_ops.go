@@ -6,6 +6,8 @@ func (w *w65816) dummyRead(inst opcode) {
 }
 
 func (w *w65816) exception(e exception) {
+	addCycle(w.cycles, FAST)
+
 	vec := w.r.vector(e)
 
 	switch e {
