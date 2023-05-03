@@ -61,10 +61,11 @@ func (w *w65816) zeropageX(fn func(addr uint24)) {
 		if (w.r.d & 0xFF) != 0 {
 			addCycle(w.cycles, FAST) // IO
 		}
-		addCycle(w.cycles, FAST)
-
-		addr := u24(0, w.r.d).plus(int(nn)).plus(int(w.r.x)) // 00:(nn+D+X)
-		fn(addr)
+		w.state = CPU_DUMMY_READ
+		w.inst = func(w *w65816) {
+			addr := u24(0, w.r.d).plus(int(nn)).plus(int(w.r.x)) // 00:(nn+D+X)
+			fn(addr)
+		}
 	})
 }
 
@@ -79,10 +80,11 @@ func (w *w65816) zeropageY(fn func(addr uint24)) {
 		if (w.r.d & 0xFF) != 0 {
 			addCycle(w.cycles, FAST) // IO
 		}
-		addCycle(w.cycles, FAST)
-
-		addr := u24(0, w.r.d).plus(int(nn)).plus(int(w.r.y)) // 00:(nn+D+Y)
-		fn(addr)
+		w.state = CPU_DUMMY_READ
+		w.inst = func(w *w65816) {
+			addr := u24(0, w.r.d).plus(int(nn)).plus(int(w.r.y)) // 00:(nn+D+Y)
+			fn(addr)
+		}
 	})
 }
 
@@ -216,14 +218,15 @@ func (w *w65816) indirectX(fn func(addr uint24)) {
 		if (w.r.d & 0xFF) != 0 {
 			addCycle(w.cycles, FAST) // IO(2a)
 		}
-		addCycle(w.cycles, FAST)
-
-		// AAL, AAH
-		addr := u24(0, w.r.d+uint16(nn)).plus(int(w.r.x))
-		w.read16(addr, func(ofs uint16) {
-			addr := u24(w.r.db, ofs) // DB:(WORD[00:(nn+D+X)])
-			fn(addr)
-		})
+		w.state = CPU_DUMMY_READ
+		w.inst = func(w *w65816) {
+			// AAL, AAH
+			addr := u24(0, w.r.d+uint16(nn)).plus(int(w.r.x))
+			w.read16(addr, func(ofs uint16) {
+				addr := u24(w.r.db, ofs) // DB:(WORD[00:(nn+D+X)])
+				fn(addr)
+			})
+		}
 	})
 }
 
@@ -303,8 +306,10 @@ func (w *w65816) indirectLongY(fn func(addr uint24)) {
 //	Example:  0x23
 func (w *w65816) stackRelative(fn func(addr uint24)) {
 	w.imm8(func(nn uint8) {
-		addCycle(w.cycles, FAST)
-		fn(u24(0, uint16(nn)).plus(int(w.r.s)))
+		w.state = CPU_DUMMY_READ
+		w.inst = func(w *w65816) {
+			fn(u24(0, uint16(nn)).plus(int(w.r.s)))
+		}
 	})
 }
 
@@ -316,11 +321,13 @@ func (w *w65816) stackRelative(fn func(addr uint24)) {
 //	Example:  0x33
 func (w *w65816) stackRelativeY(fn func(addr uint24)) {
 	w.imm8(func(nn uint8) {
-		addCycle(w.cycles, FAST)
-		addr := u24(0, uint16(nn)).plus(int(w.r.s))
-		w.read16(addr, func(ofs uint16) {
-			addCycle(w.cycles, FAST)
-			fn(u24(w.r.db, ofs).plus(int(w.r.y)))
-		})
+		w.state = CPU_DUMMY_READ
+		w.inst = func(w *w65816) {
+			addr := u24(0, uint16(nn)).plus(int(w.r.s))
+			w.read16(addr, func(ofs uint16) {
+				addCycle(w.cycles, FAST)
+				fn(u24(w.r.db, ofs).plus(int(w.r.y)))
+			})
+		}
 	})
 }
