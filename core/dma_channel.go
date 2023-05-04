@@ -55,31 +55,23 @@ func (d *dmaChan) reset() {
 }
 
 func (d *dmaChan) runGDMA(cyclesLate int64) {
-	d.isHdma = false
-
 	c := d.c.dma
-	w := d.c.w
 
+	d.isHdma = false
 	mode := d.param & 0b111
 	inc := gdmaIncrements[(d.param>>3)&0b11]
 
 	switch mode {
 	// 1x1
 	case 0:
-		src, dst := d.srcdst(0)
-		val := w.load8(src)
-		w.store8(dst, val)
-		addCycle(w.cycles, MEDIUM)
+		d.gdmaTransfer(0)
 		d.bus.a = d.bus.a.plus(inc)
 		d.dasx.offset--
 
 	// 2x1
 	case 1:
 		for i := 0; i < 2; i++ {
-			src, dst := d.srcdst(i)
-			val := w.load8(src)
-			w.store8(dst, val)
-			addCycle(w.cycles, MEDIUM)
+			d.gdmaTransfer(i)
 			d.bus.a = d.bus.a.plus(inc)
 			d.dasx.offset--
 			if d.dasx.offset == 0 {
@@ -90,10 +82,7 @@ func (d *dmaChan) runGDMA(cyclesLate int64) {
 	// 1x2
 	case 2, 6:
 		for i := 0; i < 2; i++ {
-			src, dst := d.srcdst(0)
-			val := w.load8(src)
-			w.store8(dst, val)
-			addCycle(w.cycles, MEDIUM)
+			d.gdmaTransfer(0)
 			d.bus.a = d.bus.a.plus(inc)
 			d.dasx.offset--
 			if d.dasx.offset == 0 {
@@ -106,10 +95,7 @@ func (d *dmaChan) runGDMA(cyclesLate int64) {
 	GDMA2x2:
 		for i := 0; i < 2; i++ {
 			for j := 0; j < 2; j++ {
-				src, dst := d.srcdst(i)
-				val := w.load8(src)
-				w.store8(dst, val)
-				addCycle(w.cycles, MEDIUM)
+				d.gdmaTransfer(i)
 				d.bus.a = d.bus.a.plus(inc)
 				d.dasx.offset--
 				if d.dasx.offset == 0 {
@@ -239,6 +225,51 @@ func (d *dmaChan) incrementHDMAbus(size int) {
 	} else {
 		d.a2ax += uint16(size)
 	}
+}
+
+func (d *dmaChan) gdmaTransfer(plus int) {
+	w := d.c.w
+	a := d.bus.a
+	validA := d.validA(a)
+	b := u24(0, 0x2100+uint16(d.bus.b)).plus(plus)
+	validB := b.u32() != 0x80 || ((a.u32()&0xfe0000) != 0x7e0000 && (a.u32()&0x40e000) != 0x0000)
+
+	if bit(d.param, 7) {
+		val := w.load8(b)
+		if !validB {
+			val = 0
+		}
+		if validA {
+			w.store8(a, val)
+		}
+	} else {
+		val := w.load8(a)
+		if !validA {
+			val = 0
+		}
+		if validB {
+			w.store8(b, val)
+		}
+	}
+	d.c.dma.counter += 8
+	addCycle(w.cycles, MEDIUM)
+}
+
+func (d *dmaChan) validA(a uint24) bool {
+	address := a.u32()
+	if (address & 0x40ff00) == 0x2100 {
+		return false //00-3f,80-bf:2100-21ff
+	}
+	if (address & 0x40fe00) == 0x4000 {
+		return false //00-3f,80-bf:4000-41ff
+	}
+	if (address & 0x40ffe0) == 0x4200 {
+		return false //00-3f,80-bf:4200-421f
+	}
+	if (address & 0x40ff80) == 0x4300 {
+		return false //00-3f,80-bf:4300-437f
+	}
+	return true
 }
 
 func (d *dmaChan) srcdst(plus int) (src uint24, dst uint24) {
