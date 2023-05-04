@@ -35,6 +35,10 @@ func (c *dmaController) reset() {
 	}
 }
 
+func (c *dmaController) cpuCounter() int64 {
+	return c.c.s.Cycle() & 0b111
+}
+
 func (c *dmaController) initGDMA() {
 	c.pending = false
 	c.start = c.c.s.Cycle()
@@ -43,7 +47,7 @@ func (c *dmaController) initGDMA() {
 	w.lock = setBit(w.lock, BLOCK_DMA, true) // CPU block
 
 	// wait for 8x cycles
-	addCycle(w.cycles, int64(8-c.start&0b111))
+	addCycle(w.cycles, 8-c.cpuCounter())
 	addCycle(w.cycles, 8) // DMA initialization
 	c.update()
 }
