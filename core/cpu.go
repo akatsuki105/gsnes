@@ -15,7 +15,8 @@ type w65816 struct {
 	nextEvent    *int64
 	halted       bool // by WAI
 	wram
-	cart *cartridge
+	cart      *cartridge
+	waitstate int64
 
 	nmiPending              bool // internal NMI flag
 	nmitimen, rdnmi, timeup uint8
@@ -110,6 +111,7 @@ func (w *w65816) step() (running bool) {
 		w.r.pc.offset++
 
 	case CPU_DUMMY_READ:
+		w.waitstate = FAST
 		addCycle(w.cycles, FAST)
 
 	case CPU_MEMORY_LOAD:
@@ -179,19 +181,23 @@ func (w *w65816) wait(addr uint24) int64 {
 		if bank&0x80 != 0 {
 			return w.ws2
 		}
+		w.waitstate = MEDIUM
 		return MEDIUM
 	}
 
 	// 00-3f,80-bf:0000-1fff,6000-7fff
 	if (addr32+0x6000)&0x4000 != 0 {
+		w.waitstate = MEDIUM
 		return MEDIUM
 	}
 
 	if (addr32-0x4000)&0x7e00 != 0 {
+		w.waitstate = FAST
 		return FAST
 	}
 
 	// 00-3f,80-bf:4000-41ff
+	w.waitstate = SLOW
 	return SLOW
 }
 

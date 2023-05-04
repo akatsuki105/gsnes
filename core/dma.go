@@ -14,7 +14,7 @@ type dmaController struct {
 
 	// For GDMA
 	pending bool  // GDMA pending
-	start   int64 // GDMA initalization cycle
+	counter int64 // GDMA cycle
 }
 
 func newDmaController(c *sfc) *dmaController {
@@ -41,14 +41,18 @@ func (c *dmaController) cpuCounter() int64 {
 
 func (c *dmaController) initGDMA() {
 	c.pending = false
-	c.start = c.c.s.Cycle()
 
 	w := c.c.w
 	w.lock = setBit(w.lock, BLOCK_DMA, true) // CPU block
 
 	// wait for 8x cycles
-	addCycle(w.cycles, 8-c.cpuCounter())
-	addCycle(w.cycles, 8) // DMA initialization
+	c.counter = 8 - c.cpuCounter()
+	addCycle(w.cycles, c.counter)
+
+	// DMA initialization
+	c.counter += 8
+	addCycle(w.cycles, 8)
+
 	c.update()
 }
 
@@ -69,16 +73,7 @@ func (c *dmaController) update() {
 	}
 
 	// All GDMA complete
-
-	// To reach a whole number of CPU Clock cycles since the pause
-	now, clock := c.c.s.Cycle(), w.wait(w.r.pc)
-	delay := now % clock
-	if delay == 0 {
-		// 0 is not an option
-		delay = clock
-	}
-	addCycle(w.cycles, delay)
-
+	addCycle(w.cycles, w.waitstate-(c.counter%w.waitstate)) // To reach a whole number of CPU Clock cycles since the pause
 	w.lock = setBit(w.lock, BLOCK_DMA, false)
 }
 
