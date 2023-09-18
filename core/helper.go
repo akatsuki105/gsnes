@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pokemium/gsnes/core/scheduler"
+	"github.com/akatsuki105/gsnes/core/scheduler"
 )
 
 const (

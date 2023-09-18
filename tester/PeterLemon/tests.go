@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/pokemium/gsnes/tester"
+	"github.com/akatsuki105/gsnes/tester"
 )
 
 func testBank(name string) func() error {

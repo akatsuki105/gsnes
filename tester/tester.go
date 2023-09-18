@@ -9,8 +9,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/pokemium/gsnes/core"
-	"github.com/pokemium/iro"
+	"github.com/akatsuki105/gsnes/core"
+	"github.com/akatsuki105/iro"
 )
 
 const (

@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 
-	"github.com/pokemium/gsnes/core/scheduler"
+	"github.com/akatsuki105/gsnes/core/scheduler"
 )
 
 type dmaChan struct {

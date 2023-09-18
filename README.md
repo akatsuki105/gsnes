@@ -11,7 +11,7 @@ A toy SNES emulator written in Go.
 ## Usage
 
 ```sh
-> gh repo clone pokemium/gsnes
+> gh repo clone akatsuki105/gsnes
 > cd ./gsnes & go run ./cmd ROMPATH.sfc
 ```
 

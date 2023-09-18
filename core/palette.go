@@ -1,6 +1,6 @@
 package core
 
-import "github.com/pokemium/iro"
+import "github.com/akatsuki105/iro"
 
 type palette struct {
 	buf         []iro.RGB555

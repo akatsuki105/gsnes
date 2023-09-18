@@ -5,10 +5,10 @@ import (
 	"image"
 	"image/color"
 
+	"github.com/akatsuki105/gsnes/core"
+	"github.com/akatsuki105/iro"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/pokemium/gsnes/core"
-	"github.com/pokemium/iro"
 )
 
 // pauseボタンがリリースされた場合にtrueに、押された場合にfalseにする

@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 
-	"github.com/pokemium/iro"
+	"github.com/akatsuki105/iro"
 )
 
 /*

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/akatsuki105/gsnes/core"
 	"github.com/pkg/profile"
-	"github.com/pokemium/gsnes/core"
 )
 
 // ExitCode represents program's status code

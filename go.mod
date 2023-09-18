@@ -1,12 +1,12 @@
-module github.com/pokemium/gsnes
+module github.com/akatsuki105/gsnes
 
-go 1.19
+go 1.21
 
 require (
+	github.com/akatsuki105/iro v0.0.0-20230915013632-57949dbe61f3
 	github.com/edsrzf/mmap-go v1.1.0
 	github.com/hajimehoshi/ebiten/v2 v2.4.15
 	github.com/pkg/profile v1.6.0
-	github.com/pokemium/iro v0.0.0-20220813064220-f3063293ed36
 )
 
 require (

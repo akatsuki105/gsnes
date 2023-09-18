@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/pokemium/gsnes/core/scheduler"
-	"github.com/pokemium/iro"
+	"github.com/akatsuki105/gsnes/core/scheduler"
+	"github.com/akatsuki105/iro"
 )
 
 type SuperFamicom interface {

@@ -1,7 +1,7 @@
 package core
 
 import (
-	a "github.com/pokemium/gsnes/core/apu"
+	a "github.com/akatsuki105/gsnes/core/apu"
 )
 
 // SNES Master cycles -> SPC700's CPU clock cycles

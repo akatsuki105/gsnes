@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/akatsuki105/gsnes/core"
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/pokemium/gsnes/core"
 )
 
 var exits = []func(){}

@@ -1,7 +1,7 @@
 package core
 
 import (
-	"github.com/pokemium/iro"
+	"github.com/akatsuki105/iro"
 )
 
 type renderer struct {

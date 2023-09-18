@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 
-	cart "github.com/pokemium/gsnes/core/cartridge"
+	cart "github.com/akatsuki105/gsnes/core/cartridge"
 )
 
 type cartridge struct {

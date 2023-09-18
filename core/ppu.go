@@ -3,8 +3,8 @@ package core
 import (
 	"fmt"
 
-	"github.com/pokemium/gsnes/core/scheduler"
-	"github.com/pokemium/iro"
+	"github.com/akatsuki105/gsnes/core/scheduler"
+	"github.com/akatsuki105/iro"
 )
 
 var fblankScreen = [HORIZONTAL * VERTICAL]iro.RGB555{}
