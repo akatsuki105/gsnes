@@ -4,14 +4,9 @@ import (
 	a "github.com/akatsuki105/gsnes/core/apu"
 )
 
-// SNES Master cycles -> SPC700's CPU clock cycles
-func toApuCycles(masterCycles int64) float64 {
-	return float64(masterCycles) / 21
-}
-
 type apu struct {
 	a.APU
-	cycles float64
+	cycles int64 // Clock is 21.47727MHz
 }
 
 func newApu() *apu {
@@ -38,9 +33,9 @@ func (a *apu) writeIO(addr uint, val uint8) {
 }
 
 func (a *apu) catchup() {
-	cycles := int(a.cycles)
-	for i := 0; i < cycles; i++ {
+	apuCycles := int(a.cycles) / 21
+	for i := 0; i < apuCycles; i++ {
 		a.APU.Cycle()
+		a.cycles -= 21
 	}
-	a.cycles -= float64(cycles)
 }

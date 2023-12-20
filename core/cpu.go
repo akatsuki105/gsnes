@@ -126,7 +126,7 @@ func (w *w65816) step() (running bool) {
 	w.state = CPU_FETCH
 	w.inst(w)
 
-	w.c.apu.cycles += toApuCycles(*w.cycles - prev)
+	w.c.apu.cycles += *w.cycles - prev
 	return true
 }
 

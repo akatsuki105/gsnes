@@ -59,6 +59,7 @@ func (apu *apu) Write(port int, val byte) {
 	apu.inPorts[port] = val
 }
 
+// Step 1 CPU clock cycle
 func (apu *apu) Cycle() {
 	if apu.cpuCyclesLeft == 0 {
 		apu.cpuCyclesLeft = byte(apu.spc.runOpcode())
