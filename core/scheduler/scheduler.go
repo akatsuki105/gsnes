@@ -4,19 +4,19 @@ import (
 	"fmt"
 )
 
-// Scheduler is used to synchronize between the components of the emulator.
-//
-// Scheduler's idea is from mGBA's one, so uses its timing mechanism for scheduling all kinds of stuff like how long it takes for a cartridge memory access or how long until the next time the audio engine needs to update.
-type Scheduler struct {
-	// Number of elapsed clocks of emulation core
-	cycles int64
+/*
+エミュレータのコンポーネント間の同期のためのスケジューラ
+CPUが先行し、PPUやAPUなどの他のコンポーネントがそれに追いつくようにスケジュールされる。
 
-	// Relative offset from the start of the latest CPU step.
-	RelativeCycles int64
+このエミュではスケジューラのクロックは 21.47727MHz
+*/
+type Scheduler struct {
+	cycles         int64 // コミット済みのサイクル数
+	RelativeCycles int64 // 未コミットのサイクル数(=CPUが先行しているサイクル数)
 
 	root *Event
 
-	// How much time is left until the most recent event?
+	// (CPUから見た)直近のイベントまでのサイクル数
 	//
 	// s.nextEvent = s.RelativeCycles + after(s.Schedule param)
 	NextEvent int64
